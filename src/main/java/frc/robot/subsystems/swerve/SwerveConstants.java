@@ -82,10 +82,10 @@ public final class SwerveConstants {
 		public static final double kDrivebaseRadius = Math.hypot(kTrackWidth / 2, kWheelBase / 2);
 
 		// Angular offsets of the modules relative to the chassis in radians
-		public static final double kFrontLeftChassisAngularOffset = Math.PI / 2;
-		public static final double kFrontRightChassisAngularOffset = -Math.PI / 2;
+		public static final double kFrontLeftChassisAngularOffset = 0;
+		public static final double kFrontRightChassisAngularOffset = 0;
 		public static final double kBackLeftChassisAngularOffset = 0;
-		public static final double kBackRightChassisAngularOffset = -Math.PI / 2;
+		public static final double kBackRightChassisAngularOffset = 0;
 
 		public static final double kBrownoutVoltage = 6.8;
 		static {
@@ -138,7 +138,7 @@ public final class SwerveConstants {
 		// The wheel diameter of the standard Mk5n module is 4in
 		public static final double kWheelDiameterMeters = Units.inchesToMeters(4);
 		public static final double kWheelCircumferenceMeters = kWheelDiameterMeters * Math.PI;
-		// R3 reduction Mk5n gearing (~7.03125)
+		// R1 reduction Mk5n gearing (~7.03125)
 		public static final double kDrivingMotorReduction = 40500.0 / 5760.0;
 		public static final double kDriveWheelFreeSpeed = (kDrivingMotorFreeSpeedRps * kWheelCircumferenceMeters)
 				/ kDrivingMotorReduction;
@@ -219,10 +219,15 @@ public final class SwerveConstants {
 		public static final double kDriveKsSim = 0.03457, kDriveKvSim = 2.55804;
 
 		public static final boolean kInvertDriveMotor = false;
-		public static final boolean kInvertTurnMotor = false;
+		public static final boolean kInvertTurnMotor = true;
 
 		public static final double kDriveCurrentLimitAmps = 70;
 		public static final double kTurnCurrentLimitAmps = 50;
+
+		// Determine by Tuner calibration
+		public static final double kFrontLeftEncoderOffset = 0, kFrontRightEncoderOffset = 0,
+				kRearLeftEncoderOffset = 0, kRearRightEncoderOffset = 0;
+		public static final boolean kInvertEncoders = false;
 
 		// CANCoder source for the turning motor
 		public static final FeedbackSensorSourceValue kTurnFeedbackSource = FeedbackSensorSourceValue.FusedCANcoder;
@@ -250,6 +255,7 @@ public final class SwerveConstants {
 
 			kTurningConfig.Slot0 = new Slot0Configs().withKP(kTurnP).withKD(kTurnD);
 			kTurningConfig.Feedback.FeedbackSensorSource = kTurnFeedbackSource;
+			// kTurningConfig.ClosedLoopGeneral.ContinuousWrap = true;
 		}
 	}
 

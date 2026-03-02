@@ -25,7 +25,13 @@ import static frc.robot.subsystems.swerve.SwerveConstants.DriveConstants.kRearRi
 import static frc.robot.subsystems.swerve.SwerveConstants.ModuleConfigs.kDriveKs;
 import static frc.robot.subsystems.swerve.SwerveConstants.ModuleConfigs.kDriveKv;
 import static frc.robot.subsystems.swerve.SwerveConstants.ModuleConfigs.kDrivingConfig;
+import static frc.robot.subsystems.swerve.SwerveConstants.ModuleConfigs.kFrontLeftEncoderOffset;
+import static frc.robot.subsystems.swerve.SwerveConstants.ModuleConfigs.kFrontRightEncoderOffset;
+import static frc.robot.subsystems.swerve.SwerveConstants.ModuleConfigs.kInvertEncoders;
 import static frc.robot.subsystems.swerve.SwerveConstants.ModuleConfigs.kIsFOC;
+import static frc.robot.subsystems.swerve.SwerveConstants.ModuleConfigs.kRearLeftEncoderOffset;
+import static frc.robot.subsystems.swerve.SwerveConstants.ModuleConfigs.kRearRightEncoderOffset;
+import static frc.robot.subsystems.swerve.SwerveConstants.ModuleConfigs.kTurningConfig;
 import static frc.robot.subsystems.swerve.SwerveConstants.ModuleConstants.kDrivingMotorReduction;
 import static frc.robot.subsystems.swerve.SwerveConstants.ModuleConstants.kTurningReduction;
 import static frc.robot.subsystems.swerve.SwerveConstants.ModuleConstants.kWheelDiameterMeters;
@@ -40,6 +46,7 @@ import com.ctre.phoenix6.controls.VelocityVoltage;
 import com.ctre.phoenix6.hardware.CANcoder;
 import com.ctre.phoenix6.hardware.ParentDevice;
 import com.ctre.phoenix6.hardware.TalonFX;
+import com.ctre.phoenix6.signals.SensorDirectionValue;
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.filter.Debouncer;
 import edu.wpi.first.math.filter.Debouncer.DebounceType;
@@ -125,6 +132,15 @@ public class SwerveModuleIOTalonFX implements SwerveModuleIO {
 		};
 		m_turnCancoder = new CANcoder(cancoderId, kDrivetrainBus);
 		CANcoderConfiguration cancoderConfig = new CANcoderConfiguration();
+		cancoderConfig.MagnetSensor.MagnetOffset = switch (idx) {
+			case 0 -> kFrontLeftEncoderOffset;
+			case 1 -> kFrontRightEncoderOffset;
+			case 2 -> kRearLeftEncoderOffset;
+			case 3 -> kRearRightEncoderOffset;
+			default -> 0;
+		};
+		cancoderConfig.MagnetSensor.SensorDirection = kInvertEncoders ? SensorDirectionValue.Clockwise_Positive
+				: SensorDirectionValue.CounterClockwise_Positive;
 		retryUntilOk(() -> m_turnCancoder.getConfigurator().apply(cancoderConfig), kMaxConfigAttempts,
 				"Configuring Mk5n module #" + idx + " - CANCoder");
 
@@ -136,11 +152,12 @@ public class SwerveModuleIOTalonFX implements SwerveModuleIO {
 			case 3 -> kRearRightTurningCanId;
 			default -> 0;
 		}, kDrivetrainBus);
-		retryUntilOk(() -> m_turnTalon.getConfigurator().apply(cloneTurnConfig(kDrivingConfig, cancoderId)),
+		retryUntilOk(() -> m_turnTalon.getConfigurator().apply(cloneTurnConfig(kTurningConfig, cancoderId)),
 				kMaxConfigAttempts, "Configuring Mk5n module #" + idx + " - turn motor");
 
 		// Precompute conversions
-		m_revToMeters = Math.PI * kWheelDiameterMeters / (60 * kDrivingMotorReduction);
+		// m_revToMeters = Math.PI * kWheelDiameterMeters / (60 * kDrivingMotorReduction);
+		m_revToMeters = Math.PI * kWheelDiameterMeters / kDrivingMotorReduction;
 		m_revToRads = 2 * Math.PI / kTurningReduction;
 
 		m_offset = new Rotation2d(switch (idx) {
