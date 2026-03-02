@@ -1,0 +1,41 @@
+{
+  "NTProvider": {
+    "types": {
+      "/AdvantageKit/RealOutputs/Alerts": "Alerts",
+      "/AdvantageKit/RealOutputs/PathPlanner": "Alerts",
+      "/AdvantageKit/RealOutputs/PhotonAlerts": "Alerts",
+      "/FMSInfo": "FMSInfo",
+      "/SmartDashboard/Alerts": "Alerts",
+      "/SmartDashboard/AutoClimbSide": "String Chooser",
+      "/SmartDashboard/AutoObjective1": "String Chooser",
+      "/SmartDashboard/AutoShouldScore": "String Chooser",
+      "/SmartDashboard/AutoStartingPoint": "String Chooser",
+      "/SmartDashboard/Autonomous Adaptive Neutral Time Budget": "String Chooser",
+      "/SmartDashboard/Autonomous Chooser": "String Chooser",
+      "/SmartDashboard/Autonomous Climb": "String Chooser",
+      "/SmartDashboard/Autonomous Climb Side": "String Chooser",
+      "/SmartDashboard/Autonomous Objective #1": "String Chooser",
+      "/SmartDashboard/Autonomous Objective #2": "String Chooser",
+      "/SmartDashboard/Autonomous Override Bump Cross": "String Chooser",
+      "/SmartDashboard/Autonomous Pass Through Tower": "String Chooser",
+      "/SmartDashboard/Autonomous Pass Through Tower Objective #1": "String Chooser",
+      "/SmartDashboard/Autonomous Pass Through Tower Objective #2": "String Chooser",
+      "/SmartDashboard/Autonomous PathPlanner Routines": "String Chooser",
+      "/SmartDashboard/Autonomous Scoring": "String Chooser",
+      "/SmartDashboard/Autonomous Should Score": "String Chooser",
+      "/SmartDashboard/Autonomous Starting Point": "String Chooser",
+      "/SmartDashboard/Autonomous Type": "String Chooser",
+      "/SmartDashboard/Chassis Rotation (deg)": "Gyro",
+      "/SmartDashboard/Fallback Scoring Mode": "String Chooser",
+      "/SmartDashboard/Field": "Field2d",
+      "/SmartDashboard/Identification Test Chooser": "String Chooser",
+      "/SmartDashboard/PathPlanner": "Alerts",
+      "/SmartDashboard/PhotonAlerts": "Alerts",
+      "/SmartDashboard/VisionSystemSim-main/Sim Field": "Field2d",
+      "/SmartDashboard/VisionSystemSim-main_objDet_Fuel/Sim Field": "Field2d"
+    }
+  },
+  "NetworkTables Info": {
+    "visible": true
+  }
+}

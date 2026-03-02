@@ -1,0 +1,173 @@
+{
+  "version": "2025.0",
+  "waypoints": [
+    {
+      "anchor": {
+        "x": 5.691,
+        "y": 2.51079
+      },
+      "prevControl": null,
+      "nextControl": {
+        "x": 5.385290559191761,
+        "y": 2.5855909520013864
+      },
+      "isLocked": false,
+      "linkedName": null
+    },
+    {
+      "anchor": {
+        "x": 7.695784323029958,
+        "y": 2.470710694607632
+      },
+      "prevControl": {
+        "x": 6.5412762935993705,
+        "y": 1.1492149066441575
+      },
+      "nextControl": {
+        "x": 8.30864164609369,
+        "y": 3.172211550734839
+      },
+      "isLocked": false,
+      "linkedName": null
+    },
+    {
+      "anchor": {
+        "x": 6.854522975836432,
+        "y": 6.121479555055461
+      },
+      "prevControl": {
+        "x": 8.759456952373395,
+        "y": 6.132336267563679
+      },
+      "nextControl": {
+        "x": 6.331544847153551,
+        "y": 6.1184989671394865
+      },
+      "isLocked": false,
+      "linkedName": null
+    },
+    {
+      "anchor": {
+        "x": 5.691,
+        "y": 5.5584852
+      },
+      "prevControl": {
+        "x": 5.936179472323159,
+        "y": 5.607342403679061
+      },
+      "nextControl": null,
+      "isLocked": false,
+      "linkedName": null
+    }
+  ],
+  "rotationTargets": [
+    {
+      "waypointRelativePos": 0.5220125786163522,
+      "rotationDegrees": 160.97239128966308
+    },
+    {
+      "waypointRelativePos": 0.731132075471698,
+      "rotationDegrees": 177.1490729548286
+    },
+    {
+      "waypointRelativePos": 0.9433962264150944,
+      "rotationDegrees": -136.73854014528345
+    },
+    {
+      "waypointRelativePos": 1.2830188679245282,
+      "rotationDegrees": -99.72741391597013
+    },
+    {
+      "waypointRelativePos": 1.3962264150943395,
+      "rotationDegrees": -92.55566813901154
+    },
+    {
+      "waypointRelativePos": 1.5235849056603774,
+      "rotationDegrees": -69.91963996006906
+    },
+    {
+      "waypointRelativePos": 1.6698113207547203,
+      "rotationDegrees": -56.64648661759792
+    },
+    {
+      "waypointRelativePos": 1.8349056603773652,
+      "rotationDegrees": -28.726718623349388
+    },
+    {
+      "waypointRelativePos": 2.0,
+      "rotationDegrees": 5.105568735839829
+    }
+  ],
+  "constraintZones": [
+    {
+      "name": "Bump Constraint Pass #1",
+      "minWaypointRelativePos": 0.0,
+      "maxWaypointRelativePos": 0.4380610412926392,
+      "constraints": {
+        "maxVelocity": 2.0,
+        "maxAcceleration": 4.0,
+        "maxAngularVelocity": 540.0,
+        "maxAngularAcceleration": 720.0,
+        "nominalVoltage": 12.5,
+        "unlimited": false
+      }
+    },
+    {
+      "name": "Bump Constraint Pass #2",
+      "minWaypointRelativePos": 2.45,
+      "maxWaypointRelativePos": 2.8,
+      "constraints": {
+        "maxVelocity": 2.0,
+        "maxAcceleration": 4.0,
+        "maxAngularVelocity": 540.0,
+        "maxAngularAcceleration": 720.0,
+        "nominalVoltage": 12.5,
+        "unlimited": false
+      }
+    }
+  ],
+  "pointTowardsZones": [],
+  "eventMarkers": [
+    {
+      "name": "intake_marker",
+      "waypointRelativePos": 0.4739676840215434,
+      "endWaypointRelativePos": null,
+      "command": {
+        "type": "named",
+        "data": {
+          "name": "OpenIntake"
+        }
+      }
+    },
+    {
+      "name": "intake_close_marker",
+      "waypointRelativePos": 2.25,
+      "endWaypointRelativePos": null,
+      "command": {
+        "type": "named",
+        "data": {
+          "name": "CloseIntake"
+        }
+      }
+    }
+  ],
+  "globalConstraints": {
+    "maxVelocity": 4.45,
+    "maxAcceleration": 4.5,
+    "maxAngularVelocity": 720.0,
+    "maxAngularAcceleration": 1440.0,
+    "nominalVoltage": 12.0,
+    "unlimited": false
+  },
+  "goalEndState": {
+    "velocity": 0,
+    "rotation": 0.0
+  },
+  "reversed": false,
+  "folder": "NeutralAutonLooping_Welded",
+  "idealStartingState": {
+    "velocity": 0,
+    "rotation": 180.0
+  },
+  "useDefaultConstraints": true
+}
