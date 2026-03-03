@@ -11,7 +11,7 @@ public interface SwerveModuleIO {
 	/** The inputs class for the Swerve Modules. */
 	@AutoLog
 	public class SwerveModuleIOInputs {
-		public boolean driveMotorConnected = true;
+		public boolean driveMotorConnected = false;
 		public double drivePositionMeters = 0.0;
 		public double driveVelocityMetersPerSec = 0.0;
 		public double driveAppliedVolts = 0.0;
@@ -19,13 +19,16 @@ public interface SwerveModuleIO {
 		public double driveStatorCurrentAmps = 0.0;
 		public double driveTemperatureCelsius = 0.0;
 
-		public boolean turnMotorConnected = true;
+		public boolean turnMotorConnected = false;
 		public Rotation2d turnPosition = new Rotation2d();
+		public Rotation2d turnAbsolutePosition = new Rotation2d();
 		public double turnVelocityRadPerSec = 0.0;
 		public double turnAppliedVolts = 0.0;
 		public double turnSupplyCurrentAmps = 0.0;
 		public double turnStatorCurrentAmps = 0.0;
 		public double turnTemperatureCelsius = 0.0;
+
+		public boolean cancoderConnected = false;
 
 		public double[] odometryTimestamps = new double[] {};
 		public double[] odometryDrivePositionsMeters = new double[] {};
@@ -59,23 +62,6 @@ public interface SwerveModuleIO {
 	 * @param velocityMetersPerSec The velocity.
 	 */
 	public default void runDriveVelocity(double velocityMetersPerSec) {}
-
-	/**
-	 * Runs the drive motors at the given velocity.
-	 *
-	 * @param velocityMetersPerSec The velocity.
-	 * @param ff                   The feedforward voltage.
-	 */
-	public default void runDriveVelocityFF(double velocityMetersPerSec, double ff) {}
-
-	/**
-	 * Runs the drive motors at the given velocity.
-	 *
-	 * @param velocityMetersPerSec The velocity.
-	 * @param ff                   The feedforward voltage.
-	 * @param onlyProvidedFF       Whether to only use the provided feedforward voltage or not.
-	 */
-	public default void runDriveVelocityFF(double velocityMetersPerSec, double ff, boolean onlyProvidedFF) {}
 
 	/**
 	 * Sets the turn motors to the given rotation.

@@ -1,19 +1,29 @@
 package frc.robot.subsystems.swerve.gyro;
 
+import static frc.robot.subsystems.swerve.SwerveConstants.ModuleConfigs.kGyroConfig;
+import static frc.robot.subsystems.swerve.SwerveConstants.kOdometryFrequencyHz;
+
+import com.ctre.phoenix6.BaseStatusSignal;
 import com.ctre.phoenix6.CANBus;
+import com.ctre.phoenix6.StatusSignal;
+import com.ctre.phoenix6.hardware.ParentDevice;
 import com.ctre.phoenix6.hardware.Pigeon2;
 import edu.wpi.first.math.geometry.Rotation2d;
-import frc.robot.subsystems.swerve.odometry.OdometryThread;
+import edu.wpi.first.units.measure.Angle;
+import edu.wpi.first.units.measure.AngularVelocity;
+import frc.robot.subsystems.swerve.TalonFXOdometryThread;
 import java.util.Queue;
-import java.util.function.DoubleSupplier;
 
 /** The gyroscope IO implementation for the Pigeon 2. */
 public class GyroIOPigeon2 implements GyroIO {
-
 	private Pigeon2 m_pigeon;
 
 	private Queue<Double> m_odometryTimestamps;
 	private Queue<Double> m_odometryYawPositions;
+
+	private StatusSignal<Angle> m_yawSignal;
+	private StatusSignal<AngularVelocity> m_angularVelocitySignal;
+	private StatusSignal<Angle> m_pitchSignal;
 
 	/**
 	 * Constructs a new GyroIOPigeon2.
@@ -33,9 +43,17 @@ public class GyroIOPigeon2 implements GyroIO {
 	public GyroIOPigeon2(int canId, CANBus canBus) {
 		m_pigeon = new Pigeon2(canId, canBus);
 
-		@SuppressWarnings("unchecked")
-		OdometryThread<?, ?, DoubleSupplier> odometryThread = (OdometryThread<?, ?, DoubleSupplier>) OdometryThread
-				.getInstance();
+		m_pigeon.getConfigurator().apply(kGyroConfig);
+
+		m_yawSignal = m_pigeon.getYaw();
+		m_angularVelocitySignal = m_pigeon.getAngularVelocityZWorld();
+		m_pitchSignal = m_pigeon.getPitch();
+
+		BaseStatusSignal.setUpdateFrequencyForAll(kOdometryFrequencyHz, m_yawSignal, m_angularVelocitySignal,
+				m_pitchSignal);
+		ParentDevice.optimizeBusUtilizationForAll(m_pigeon);
+
+		var odometryThread = TalonFXOdometryThread.getInstance();
 		m_odometryTimestamps = odometryThread.makeTimestampQueue();
 		m_odometryYawPositions = odometryThread.registerSignal(this::getYawDegrees);
 	}
@@ -44,7 +62,7 @@ public class GyroIOPigeon2 implements GyroIO {
 	public void updateInputs(GyroIOInputsAutoLogged inputs) {
 		inputs.yawDegrees = getYawDegrees();
 		inputs.omegaDegreesPerSecond = getOmegaDegreesPerSecond();
-		inputs.pitchDegrees = m_pigeon.getPitch().getValueAsDouble();
+		inputs.pitchDegrees = m_pitchSignal.getValueAsDouble();
 
 		inputs.odometryYawTimestamps = m_odometryTimestamps.stream().mapToDouble((v) -> v).toArray();
 		inputs.odometryYawPositions = m_odometryYawPositions.stream()
@@ -56,10 +74,10 @@ public class GyroIOPigeon2 implements GyroIO {
 	}
 
 	@Override
-	public double getYawDegrees() { return m_pigeon.getYaw().getValueAsDouble(); }
+	public double getYawDegrees() { return m_yawSignal.getValueAsDouble(); }
 
 	@Override
-	public double getOmegaDegreesPerSecond() { return m_pigeon.getAngularVelocityZWorld().getValueAsDouble(); }
+	public double getOmegaDegreesPerSecond() { return m_angularVelocitySignal.getValueAsDouble(); }
 
 	@Override
 	public void setYaw(double yaw) {

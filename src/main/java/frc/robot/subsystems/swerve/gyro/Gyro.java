@@ -16,7 +16,7 @@ public class Gyro {
 		m_io = io;
 	}
 
-	/** Applies periodic updates. */
+	/** Applies periodic input updates. */
 	public void periodic() {
 		m_io.updateInputs(m_inputs);
 		Logger.processInputs("Gyro/Inputs", m_inputs);

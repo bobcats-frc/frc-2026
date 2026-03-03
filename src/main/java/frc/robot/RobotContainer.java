@@ -84,9 +84,8 @@ import frc.robot.subsystems.swerve.gyro.GyroIO;
 import frc.robot.subsystems.swerve.gyro.GyroIOPigeon2;
 import frc.robot.subsystems.swerve.gyro.GyroIOSim;
 import frc.robot.subsystems.swerve.module.SwerveModuleIO;
+import frc.robot.subsystems.swerve.module.SwerveModuleIOKraken;
 import frc.robot.subsystems.swerve.module.SwerveModuleIOSim;
-import frc.robot.subsystems.swerve.module.SwerveModuleIOTalonFX;
-import frc.robot.subsystems.swerve.odometry.TalonFXOdometryThread;
 import java.util.Comparator;
 import java.util.function.Supplier;
 import org.ironmaple.simulation.SimulatedArena;
@@ -136,9 +135,6 @@ public class RobotContainer {
 	// Controller alerts
 	private Alert m_operatorControlWarning = new Alert("The operator controller is disconnected!", AlertType.kError);
 	private Alert m_driverControlWarning = new Alert("The driver controller is disconnected!", AlertType.kError);
-
-	// Must initialize the thread before any modules
-	private static final TalonFXOdometryThread kOdometryThread = new TalonFXOdometryThread();
 
 	/** Constructs a new RobotContainer. */
 	public RobotContainer() {
@@ -322,8 +318,8 @@ public class RobotContainer {
 				swerveSim = null;
 				Gyro gyro = new Gyro(new GyroIOPigeon2(DriveConstants.kPigeon2CanId, SwerveConstants.kDrivetrainBus));
 
-				swerve = new SwerveSubsystem(new SwerveModuleIOTalonFX(0), new SwerveModuleIOTalonFX(1),
-						new SwerveModuleIOTalonFX(2), new SwerveModuleIOTalonFX(3), gyro, kOdometryThread, null,
+				swerve = new SwerveSubsystem(new SwerveModuleIOKraken(0), new SwerveModuleIOKraken(1),
+						new SwerveModuleIOKraken(2), new SwerveModuleIOKraken(3), gyro, null,
 						VisionConstants.kOdometryStdDevs,
 						new LibVisionIOLimelight(VisionConstants.kLLName_Right,
 								() -> Rotation2d.fromDegrees(gyro.getInputs().yawDegrees),
@@ -357,8 +353,8 @@ public class RobotContainer {
 						new SwerveModuleIOSim(swerveSim.getModules()[1]),
 						new SwerveModuleIOSim(swerveSim.getModules()[2]),
 						new SwerveModuleIOSim(swerveSim.getModules()[3]),
-						new Gyro(new GyroIOSim(swerveSim.getGyroSimulation())), kOdometryThread,
-						swerveSim::setSimulationWorldPose, VisionConstants.kOdometryStdDevs,
+						new Gyro(new GyroIOSim(swerveSim.getGyroSimulation())), swerveSim::setSimulationWorldPose,
+						VisionConstants.kOdometryStdDevs,
 						new LibVisionIOPhotonVisionSim(VisionConstants.kLLName_Right,
 								VisionConstants.kRobotToCamera_Right, null,
 								() -> superstructure.superstructureVisualizer
@@ -404,8 +400,8 @@ public class RobotContainer {
 				swerveSim = null;
 				// Dummy IOs for replay
 				swerve = new SwerveSubsystem(new SwerveModuleIO() {}, new SwerveModuleIO() {}, new SwerveModuleIO() {},
-						new SwerveModuleIO() {}, new Gyro(new GyroIO() {}), kOdometryThread, null,
-						VecBuilder.fill(0.1, 0.1, 0.05), new LibVisionIO() {});
+						new SwerveModuleIO() {}, new Gyro(new GyroIO() {}), null, VecBuilder.fill(0.1, 0.1, 0.05),
+						new LibVisionIO() {});
 				objectDetection = new ObjectDetectionSubsystem("Fuel", new ObjectDetectionIO() {});
 			default:
 				break;

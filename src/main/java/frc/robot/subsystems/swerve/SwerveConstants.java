@@ -6,14 +6,25 @@ import static edu.wpi.first.units.Units.Meters;
 import static edu.wpi.first.units.Units.Volts;
 import static frc.robot.subsystems.swerve.SwerveConstants.ModuleConfigs.kPerModuleDriveGearbox;
 import static frc.robot.subsystems.swerve.SwerveConstants.ModuleConfigs.kPerModuleTurnGearbox;
+import static frc.robot.subsystems.swerve.SwerveConstants.ModuleConstants.kDrivingMotorReduction;
+import static frc.robot.subsystems.swerve.SwerveConstants.ModuleConstants.kTurningReduction;
+import static frc.robot.subsystems.swerve.SwerveConstants.ModuleConstants.kWheelCircumferenceMeters;
+
+import java.util.Map;
+
+import org.ironmaple.simulation.drivesims.COTS;
+import org.ironmaple.simulation.drivesims.configs.DriveTrainSimulationConfig;
+import org.ironmaple.simulation.drivesims.configs.SwerveModuleSimulationConfig;
 
 import com.ctre.phoenix6.CANBus;
+import com.ctre.phoenix6.configs.Pigeon2Configuration;
 import com.ctre.phoenix6.configs.Slot0Configs;
 import com.ctre.phoenix6.configs.TalonFXConfiguration;
 import com.ctre.phoenix6.signals.FeedbackSensorSourceValue;
 import com.ctre.phoenix6.signals.InvertedValue;
 import com.ctre.phoenix6.signals.NeutralModeValue;
 import com.pathplanner.lib.path.PathConstraints;
+
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Translation2d;
@@ -21,13 +32,8 @@ import edu.wpi.first.math.kinematics.SwerveDriveKinematics;
 import edu.wpi.first.math.system.plant.DCMotor;
 import edu.wpi.first.math.util.Units;
 import edu.wpi.first.wpilibj.DriverStation.Alliance;
-import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj2.command.Command;
 import frc.robot.constants.Constants.PhysicalParameters;
-import java.util.Map;
-import org.ironmaple.simulation.drivesims.COTS;
-import org.ironmaple.simulation.drivesims.configs.DriveTrainSimulationConfig;
-import org.ironmaple.simulation.drivesims.configs.SwerveModuleSimulationConfig;
 
 // TODO Needs checking
 
@@ -47,7 +53,7 @@ public final class SwerveConstants {
 	public static final int kOdometryUpdatePeriodMs = (int) (1000.0 / kOdometryFrequencyHz);
 
 	// Whether the gyro angle should be inverted when zeroGyroFieldRelative is
-	// called
+	// called, shooter faces away from DS
 	public static final boolean kInvertGyroZero = false;
 
 	/** Class holding the drive constants. */
@@ -87,11 +93,11 @@ public final class SwerveConstants {
 		public static final double kBackLeftChassisAngularOffset = 0;
 		public static final double kBackRightChassisAngularOffset = 0;
 
-		public static final double kBrownoutVoltage = 6.8;
-		static {
-			// Only effective on the roboRIO 2
-			RobotController.setBrownoutVoltage(kBrownoutVoltage);
-		}
+		// public static final double kBrownoutVoltage = 6.8;
+		// static {
+		// // Only effective on the roboRIO 2
+		// RobotController.setBrownoutVoltage(kBrownoutVoltage);
+		// }
 
 		// Motor IDs
 		public static final int kFrontLeftDrivingCanId = 9;
@@ -109,7 +115,7 @@ public final class SwerveConstants {
 		public static final int kFrontRightCANCoderId = -1;
 		public static final int kRearRightCANCoderId = -1;
 
-		public static final int kPigeon2CanId = 7;
+		public static final int kPigeon2CanId = 1;
 
 		// Whether to enable cosine compensation for the real robot and simulation
 		public static final boolean kCosineCompensateReal = true;
@@ -117,8 +123,7 @@ public final class SwerveConstants {
 
 		// Factor to correct for skews in the swerve modules while steering and driving
 		// * Start with 0 to figure out the default skew direction when rotating in a
-		// specific
-		// direction
+		// specific direction
 		// Ideally should be in the range -0.15 to 0.15, start tuning with 0.1
 		// * If skew gets worse, negate the value
 		// * If the skew changes direction while rotating in the same direction, make
@@ -135,7 +140,8 @@ public final class SwerveConstants {
 	public static final class ModuleConstants {
 		// Calculations required for conversion factors
 		public static final double kDrivingMotorFreeSpeedRps = DriveMotorConstants.kFreeSpeedRpm / 60.0;
-		// The wheel diameter of the standard Mk5n module is 4in
+		// The wheel diameter of the standard Mk5n module is 4in 
+		// (TODO measure via command)
 		public static final double kWheelDiameterMeters = Units.inchesToMeters(4);
 		public static final double kWheelCircumferenceMeters = kWheelDiameterMeters * Math.PI;
 		// R1 reduction Mk5n gearing (~7.03125)
@@ -185,8 +191,8 @@ public final class SwerveConstants {
 
 		public static final double kPathfindSkipTolerance = 0.045;
 
-		// Whether to apply the feedforwards provided by PathPlanner
-		public static final boolean kUseAutonomousFeedforward = false;
+		// // Whether to apply the feedforwards provided by PathPlanner
+		// public static final boolean kUseAutonomousFeedforward = false;
 
 		// The alliance to invert the paths at
 		public static final Alliance kInvertAutonomousPathAlliance = Alliance.Red;
@@ -196,6 +202,8 @@ public final class SwerveConstants {
 	public static final class ModuleConfigs {
 		public static final TalonFXConfiguration kDrivingConfig = new TalonFXConfiguration();
 		public static final TalonFXConfiguration kTurningConfig = new TalonFXConfiguration();
+
+		public static final Pigeon2Configuration kGyroConfig = new Pigeon2Configuration();
 
 		// Whether the motor is a FOC motor (only on phoenix pro)
 		public static final boolean kIsFOC = true;
@@ -209,11 +217,14 @@ public final class SwerveConstants {
 				? new DCMotor(12, 5.01, 329, 3.2, Units.rotationsPerMinuteToRadiansPerSecond(7367), 1)
 				: new DCMotor(12, 4.11, 279, 3.2, Units.rotationsPerMinuteToRadiansPerSecond(7757), 1);
 
-		public static final double kDriveP = 0.04, kDriveI = 0, kDriveD = 0;
-		public static final double kTurnP = 1, kTurnI = 0, kTurnD = 0;
+		// Units:
+		// Drive: V / (m/s)
+		// Turn: V / (rad/s)
+		public static final double kDriveP = 2/* 0.04 */, kDriveD = 0;
+		public static final double kTurnP = 1, kTurnD = 0;
 
-		public static final double kDrivePSim = 10, kDriveISim = 0, kDriveDSim = 0;
-		public static final double kTurnPSim = 8, kTurnISim = 0, kTurnDSim = 0;
+		public static final double kDrivePSim = 10, kDriveDSim = 0;
+		public static final double kTurnPSim = 8, kTurnDSim = 0;
 
 		public static final double kDriveKs = 0.03457, kDriveKv = 2.55804;
 		public static final double kDriveKsSim = 0.03457, kDriveKvSim = 2.55804;
@@ -225,6 +236,9 @@ public final class SwerveConstants {
 		public static final double kTurnCurrentLimitAmps = 50;
 
 		// Determine by Tuner calibration
+		// "It’s extremely important for the modules to be aligned such that the bevel
+		// gear faces the vertical center of the robot. Failure to perform this step may
+		// lead the drive verification tests to fail."
 		public static final double kFrontLeftEncoderOffset = 0, kFrontRightEncoderOffset = 0,
 				kRearLeftEncoderOffset = 0, kRearRightEncoderOffset = 0;
 		public static final boolean kInvertEncoders = false;
@@ -234,7 +248,7 @@ public final class SwerveConstants {
 
 		static {
 			// Drive Config
-			kDrivingConfig.CurrentLimits.SupplyCurrentLimitEnable = false;
+			// kDrivingConfig.CurrentLimits.SupplyCurrentLimitEnable = false;
 			kDrivingConfig.CurrentLimits.StatorCurrentLimit = kDriveCurrentLimitAmps;
 
 			kDrivingConfig.MotorOutput.NeutralMode = NeutralModeValue.Brake;
@@ -242,10 +256,14 @@ public final class SwerveConstants {
 			kDrivingConfig.MotorOutput.Inverted = kInvertDriveMotor ? InvertedValue.Clockwise_Positive
 					: InvertedValue.CounterClockwise_Positive;
 
-			kDrivingConfig.Slot0 = new Slot0Configs().withKP(kDriveP).withKD(kDriveD).withKS(kDriveKs).withKV(kDriveKv);
+			kDrivingConfig.Slot0 = new Slot0Configs().withKP(kDriveP * kWheelCircumferenceMeters)
+					.withKD(kDriveD * kWheelCircumferenceMeters).withKS(kDriveKs)
+					.withKV(kDriveKv * kWheelCircumferenceMeters);
+
+			kDrivingConfig.Feedback.SensorToMechanismRatio = kDrivingMotorReduction;
 
 			// Turn Config
-			kTurningConfig.CurrentLimits.SupplyCurrentLimitEnable = false;
+			// kTurningConfig.CurrentLimits.SupplyCurrentLimitEnable = false;
 			kTurningConfig.CurrentLimits.StatorCurrentLimit = kTurnCurrentLimitAmps;
 
 			kTurningConfig.MotorOutput.NeutralMode = NeutralModeValue.Brake;
@@ -253,9 +271,12 @@ public final class SwerveConstants {
 			kTurningConfig.MotorOutput.Inverted = kInvertTurnMotor ? InvertedValue.Clockwise_Positive
 					: InvertedValue.CounterClockwise_Positive;
 
-			kTurningConfig.Slot0 = new Slot0Configs().withKP(kTurnP).withKD(kTurnD);
+			kTurningConfig.Slot0 = new Slot0Configs().withKP(kTurnP * 2 * Math.PI).withKD(kTurnD * 2 * Math.PI);
+			kTurningConfig.ClosedLoopGeneral.ContinuousWrap = true;
+
 			kTurningConfig.Feedback.FeedbackSensorSource = kTurnFeedbackSource;
-			// kTurningConfig.ClosedLoopGeneral.ContinuousWrap = true;
+			// kTurningConfig.Feedback.SensorToMechanismRatio = kTurningReduction;
+			kTurningConfig.Feedback.RotorToSensorRatio = kTurningReduction;
 		}
 	}
 
@@ -307,9 +328,11 @@ public final class SwerveConstants {
 				.withKD(base.Slot0.kD)
 				.withKS(base.Slot0.kS)
 				.withKV(base.Slot0.kV);
+		newConfig.ClosedLoopGeneral.ContinuousWrap = base.ClosedLoopGeneral.ContinuousWrap;
 
 		newConfig.Feedback.FeedbackRemoteSensorID = sensorId;
 		newConfig.Feedback.FeedbackSensorSource = base.Feedback.FeedbackSensorSource;
+		newConfig.Feedback.RotorToSensorRatio = base.Feedback.RotorToSensorRatio;
 
 		return newConfig;
 	}

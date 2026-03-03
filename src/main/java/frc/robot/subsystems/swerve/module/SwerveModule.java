@@ -33,10 +33,9 @@ public class SwerveModule {
 
 	private int m_idx;
 
-	private SwerveModulePosition m_position = new SwerveModulePosition();
 	private SwerveModulePosition[] m_modulePositions = new SwerveModulePosition[] {};
 
-	private Alert m_driveDisconnectAlert, m_steerDisconnectAlert;
+	private Alert m_driveDisconnectAlert, m_steerDisconnectAlert, m_cancoderDisconnectAlert;
 	private Alert m_driveTempAlert, m_steerTempAlert;
 
 	private boolean m_overheatEStop = false;
@@ -63,6 +62,8 @@ public class SwerveModule {
 				AlertType.kError);
 		m_steerDisconnectAlert = new Alert("Swerve module #" + m_idx + " steer motor has disconnected!",
 				AlertType.kError);
+		m_cancoderDisconnectAlert = new Alert("Swerve module #" + m_idx + " CANCoder has disconnected!",
+				AlertType.kError);
 	}
 
 	/** Applies periodic updates. */
@@ -71,8 +72,6 @@ public class SwerveModule {
 
 		m_io.updateInputs(m_inputs);
 		Logger.processInputs("Drive/Module" + m_idx, m_inputs);
-
-		m_position = new SwerveModulePosition(m_inputs.drivePositionMeters, m_inputs.turnPosition);
 
 		int sampleCount = m_inputs.odometryTimestamps.length; // All signals are sampled together
 		m_modulePositions = new SwerveModulePosition[sampleCount];
@@ -84,6 +83,7 @@ public class SwerveModule {
 
 		m_driveDisconnectAlert.set(!m_inputs.driveMotorConnected);
 		m_steerDisconnectAlert.set(!m_inputs.turnMotorConnected);
+		m_cancoderDisconnectAlert.set(!m_inputs.cancoderConnected);
 
 		// Update the module temperature alerts
 
@@ -139,45 +139,6 @@ public class SwerveModule {
 	}
 
 	/**
-	 * Sets the target state of the module with the given feedforward. If stopped due to
-	 * overheating, won't apply the target state.
-	 *
-	 * @param desiredState The target state.
-	 * @param ff           The feedforward voltage.
-	 */
-	public void setDesiredStateFF(SwerveModuleState desiredState, double ff) {
-		if (m_overheatEStop) { stop(); return; }
-
-		// Optimize state
-		optimize(desiredState);
-
-		if (Math.abs(desiredState.speedMetersPerSecond) < DriveConstants.kJitterVelocityDeadbandMps) { stop(); return; }
-
-		m_io.runDriveVelocityFF(desiredState.speedMetersPerSecond, ff);
-		m_io.runTurnPosition(desiredState.angle);
-	}
-
-	/**
-	 * Sets the target state of the module with the given feedforward. If stopped due to
-	 * overheating, won't apply the target state.
-	 *
-	 * @param desiredState   The target state.
-	 * @param ff             The feedforward voltage.
-	 * @param onlyProvidedFF Whether to only use the provided feedforward voltage or not.
-	 */
-	public void setDesiredStateFF(SwerveModuleState desiredState, double ff, boolean onlyProvidedFF) {
-		if (m_overheatEStop) { stop(); return; }
-
-		// Optimize state
-		optimize(desiredState);
-
-		if (Math.abs(desiredState.speedMetersPerSecond) < DriveConstants.kJitterVelocityDeadbandMps) { stop(); return; }
-
-		m_io.runDriveVelocityFF(desiredState.speedMetersPerSecond, ff, onlyProvidedFF);
-		m_io.runTurnPosition(desiredState.angle);
-	}
-
-	/**
 	 * Sets the module to drive in open-loop mode.
 	 *
 	 * @param voltsDrive The voltage to apply to the drive motor.
@@ -220,7 +181,7 @@ public class SwerveModule {
 	 *
 	 * @return The module position.
 	 */
-	public SwerveModulePosition getOdometryPosition() { return m_position; }
+	public SwerveModulePosition getOdometryPosition() { return new SwerveModulePosition(m_inputs.drivePositionMeters, m_inputs.turnPosition); }
 
 	/**
 	 * Returns the current module state.

@@ -13,7 +13,7 @@
 
 // A slightly modified version of SparkOdometryThread.java.
 
-package frc.robot.subsystems.swerve.odometry;
+package frc.robot.subsystems.swerve;
 
 import static edu.wpi.first.units.Units.Hertz;
 import static edu.wpi.first.units.Units.Seconds;
@@ -24,20 +24,22 @@ import edu.wpi.first.wpilibj.Notifier;
 import edu.wpi.first.wpilibj.Timer;
 import frc.robot.Robot;
 import frc.robot.constants.Constants.RobotMode;
-import frc.robot.subsystems.swerve.SwerveConstants;
-import frc.robot.subsystems.swerve.SwerveSubsystem;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.function.DoubleSupplier;
+import lombok.Getter;
 import org.ironmaple.simulation.SimulatedArena;
 
 /**
  * Provides an interface for asynchronously reading high-frequency measurements to a set of
  * queues.
  */
-public class TalonFXOdometryThread implements OdometryThread<TalonFX, BaseStatusSignal, DoubleSupplier> {
+public class TalonFXOdometryThread extends Thread {
+	@Getter
+	private static TalonFXOdometryThread instance;
+
 	private static final int kQueueLength = 80;
 
 	private final List<TalonFX> m_talons = new ArrayList<>();
@@ -54,11 +56,11 @@ public class TalonFXOdometryThread implements OdometryThread<TalonFX, BaseStatus
 
 	/** Constructs a new TalonFXOdometryThread. */
 	public TalonFXOdometryThread() {
-		if (OdometryThread.instance.get() != null)
+		if (instance != null)
 			throw new IllegalStateException("can't have more than 1 instance of a high-frequency odometry thread");
+
 		m_notifier.setName("HighFrequencyOdometryThread_Talon");
-		OdometryThread.instance.set(this);
-		OdometryThread.threadType.set("TALONFX");
+		instance = this;
 		System.out.println("TalonFX Odometry Thread Frequency: " + kFrquency + " Hz");
 	}
 
@@ -67,7 +69,13 @@ public class TalonFXOdometryThread implements OdometryThread<TalonFX, BaseStatus
 		if (!m_timestampQueues.isEmpty()) m_notifier.startPeriodic(1.0 / kFrquency);
 	}
 
-	@Override
+	/**
+	 * Registers the given signal to the odometry thread.
+	 *
+	 * @param motor  The motor the signal is received from.
+	 * @param signal The signal which is being received.
+	 * @return The generated queue.
+	 */
 	public Queue<Double> registerSignal(TalonFX motor, BaseStatusSignal signal) {
 		BaseStatusSignal.setUpdateFrequencyForAll(Hertz.of(kFrquency), signal);
 		Queue<Double> queue = new ArrayBlockingQueue<>(kQueueLength);
@@ -82,7 +90,12 @@ public class TalonFXOdometryThread implements OdometryThread<TalonFX, BaseStatus
 		return queue;
 	}
 
-	@Override
+	/**
+	 * Registers the given signal to the odometry thread.
+	 *
+	 * @param signal The signal which is being received.
+	 * @return The generated queue.
+	 */
 	public Queue<Double> registerSignal(DoubleSupplier signal) {
 		Queue<Double> queue = new ArrayBlockingQueue<>(kQueueLength);
 		SwerveSubsystem.odometryLock.lock();
@@ -95,7 +108,11 @@ public class TalonFXOdometryThread implements OdometryThread<TalonFX, BaseStatus
 		return queue;
 	}
 
-	@Override
+	/**
+	 * Generates a timestamp queue.
+	 *
+	 * @return The generated queue.
+	 */
 	public Queue<Double> makeTimestampQueue() {
 		Queue<Double> queue = new ArrayBlockingQueue<>(kQueueLength);
 		SwerveSubsystem.odometryLock.lock();
@@ -107,7 +124,7 @@ public class TalonFXOdometryThread implements OdometryThread<TalonFX, BaseStatus
 		return queue;
 	}
 
-	private void run() {
+	public void run() {
 		// Save new data to queues
 		SwerveSubsystem.odometryLock.lock();
 		try {

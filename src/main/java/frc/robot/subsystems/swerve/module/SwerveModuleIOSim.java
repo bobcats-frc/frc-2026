@@ -7,13 +7,11 @@ import static edu.wpi.first.units.Units.Seconds;
 import static edu.wpi.first.units.Units.Volts;
 import static frc.robot.subsystems.swerve.SwerveConstants.ModuleConfigs.kDriveCurrentLimitAmps;
 import static frc.robot.subsystems.swerve.SwerveConstants.ModuleConfigs.kDriveDSim;
-import static frc.robot.subsystems.swerve.SwerveConstants.ModuleConfigs.kDriveISim;
 import static frc.robot.subsystems.swerve.SwerveConstants.ModuleConfigs.kDriveKsSim;
 import static frc.robot.subsystems.swerve.SwerveConstants.ModuleConfigs.kDriveKvSim;
 import static frc.robot.subsystems.swerve.SwerveConstants.ModuleConfigs.kDrivePSim;
 import static frc.robot.subsystems.swerve.SwerveConstants.ModuleConfigs.kTurnCurrentLimitAmps;
 import static frc.robot.subsystems.swerve.SwerveConstants.ModuleConfigs.kTurnDSim;
-import static frc.robot.subsystems.swerve.SwerveConstants.ModuleConfigs.kTurnISim;
 import static frc.robot.subsystems.swerve.SwerveConstants.ModuleConfigs.kTurnPSim;
 import static frc.robot.subsystems.swerve.SwerveConstants.ModuleConstants.kWheelDiameterMeters;
 
@@ -32,8 +30,8 @@ public class SwerveModuleIOSim implements SwerveModuleIO {
 	private SimulatedMotorController.GenericMotorController m_driveMotor;
 	private SimulatedMotorController.GenericMotorController m_turnMotor;
 
-	private final PIDController m_driveController = new PIDController(kDrivePSim, kDriveISim, kDriveDSim);
-	private final PIDController m_turnController = new PIDController(kTurnPSim, kTurnISim, kTurnDSim);
+	private final PIDController m_driveController = new PIDController(kDrivePSim, 0, kDriveDSim);
+	private final PIDController m_turnController = new PIDController(kTurnPSim, 0, kTurnDSim);
 
 	private boolean m_driveClosedLoop = false;
 	private boolean m_turnClosedLoop = false;
@@ -92,6 +90,10 @@ public class SwerveModuleIOSim implements SwerveModuleIO {
 		inputs.turnStatorCurrentAmps = m_moduleSimulation.getSteerMotorStatorCurrent().in(Amps);
 		inputs.turnTemperatureCelsius = 30;
 
+		// Update 'CANCoder' inputs
+		inputs.cancoderConnected = true;
+		inputs.turnAbsolutePosition = m_moduleSimulation.getSteerAbsoluteFacing();
+
 		// Update odometry inputs
 		inputs.odometryTimestamps = getSimulationOdometryTimeStamps();
 		inputs.odometryDrivePositionsMeters = Arrays.stream(m_moduleSimulation.getCachedDriveWheelFinalPositions())
@@ -102,21 +104,8 @@ public class SwerveModuleIOSim implements SwerveModuleIO {
 
 	@Override
 	public void runDriveVelocity(double velocityMetersPerSec) {
-		runDriveVelocityFF(velocityMetersPerSec, 0);
-	}
-
-	@Override
-	public void runDriveVelocityFF(double velocityMetersPerSec, double ff) {
 		m_driveClosedLoop = true;
-		m_driveFF = ff + kDriveKsSim * Math.signum(velocityMetersPerSec) + kDriveKvSim * velocityMetersPerSec;
-		m_driveController.setSetpoint(velocityMetersPerSec);
-	}
-
-	@Override
-	public void runDriveVelocityFF(double velocityMetersPerSec, double ff, boolean onlyProvidedFF) {
-		m_driveClosedLoop = true;
-		m_driveFF = ff + (onlyProvidedFF ? 0
-				: kDriveKsSim * Math.signum(velocityMetersPerSec) + kDriveKvSim * velocityMetersPerSec);
+		m_driveFF = kDriveKsSim * Math.signum(velocityMetersPerSec) + kDriveKvSim * velocityMetersPerSec;
 		m_driveController.setSetpoint(velocityMetersPerSec);
 	}
 
@@ -141,8 +130,6 @@ public class SwerveModuleIOSim implements SwerveModuleIO {
 	private static double[] getSimulationOdometryTimeStamps() {
 		final double[] odometryTimeStamps = new double[SimulatedArena.getSimulationSubTicksIn1Period()];
 		for (int i = 0; i < odometryTimeStamps.length; i++)
-			// odometryTimeStamps[i] = Timer.getFPGATimestamp() - 0.02 + i *
-			// SimulatedArena.getSimulationDt().in(Seconds);
 			odometryTimeStamps[i] = Timer.getFPGATimestamp() - Constants.kLoopPeriodSeconds
 					+ i * SimulatedArena.getSimulationDt().in(Seconds);
 		return odometryTimeStamps;

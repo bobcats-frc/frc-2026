@@ -1,7 +1,6 @@
 package frc.robot.subsystems.swerve;
 
 import static com.bobcats.lib.utils.Utils.roundDigits;
-import static edu.wpi.first.units.Units.Newtons;
 import static edu.wpi.first.units.Units.Seconds;
 import static edu.wpi.first.units.Units.Volts;
 import static frc.robot.subsystems.swerve.SwerveConstants.DriveConstants.kDriveKinematics;
@@ -35,7 +34,6 @@ import edu.wpi.first.math.kinematics.SwerveModulePosition;
 import edu.wpi.first.math.kinematics.SwerveModuleState;
 import edu.wpi.first.math.numbers.N1;
 import edu.wpi.first.math.numbers.N3;
-import edu.wpi.first.units.measure.Force;
 import edu.wpi.first.util.sendable.Sendable;
 import edu.wpi.first.util.sendable.SendableBuilder;
 import edu.wpi.first.wpilibj.Alert;
@@ -52,12 +50,9 @@ import frc.robot.RobotContainer;
 import frc.robot.constants.Constants;
 import frc.robot.subsystems.swerve.SwerveConstants.AutoConstants;
 import frc.robot.subsystems.swerve.SwerveConstants.DriveConstants;
-import frc.robot.subsystems.swerve.SwerveConstants.ModuleConfigs;
-import frc.robot.subsystems.swerve.SwerveConstants.ModuleConstants;
 import frc.robot.subsystems.swerve.gyro.Gyro;
 import frc.robot.subsystems.swerve.module.SwerveModule;
 import frc.robot.subsystems.swerve.module.SwerveModuleIO;
-import frc.robot.subsystems.swerve.odometry.OdometryThread;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
@@ -93,7 +88,7 @@ public class SwerveSubsystem extends SubsystemBase {
 
 	// Odometry thread
 	public static Lock odometryLock = new ReentrantLock();
-	public static OdometryThread<?, ?, ?> odometryThread;
+	public static TalonFXOdometryThread odometryThread = new TalonFXOdometryThread();
 
 	// Accelerations
 	private ChassisSpeeds m_accelField; // Accel represented by a ChassisSpeeds
@@ -126,15 +121,14 @@ public class SwerveSubsystem extends SubsystemBase {
 	 * @param visionIOs           The preset vision subystem IOs for localization.
 	 */
 	public SwerveSubsystem(SwerveModuleIO frontLeft, SwerveModuleIO frontRight, SwerveModuleIO rearLeft,
-			SwerveModuleIO rearRight, Gyro gyro, OdometryThread<?, ?, ?> odometry, Consumer<Pose2d> resetSimulationPose,
-			Matrix<N3, N1> odometryStdDevs, LibVisionIO... visionIOs) {
+			SwerveModuleIO rearRight, Gyro gyro, Consumer<Pose2d> resetSimulationPose, Matrix<N3, N1> odometryStdDevs,
+			LibVisionIO... visionIOs) {
 		m_modules = new SwerveModule[] { new SwerveModule(frontLeft, 0), new SwerveModule(frontRight, 1),
 				new SwerveModule(rearLeft, 2), new SwerveModule(rearRight, 3) };
 
 		// Start odometry
-		odometryThread = odometry;
 		odometryThread.start();
-		System.out.println("Starting odometry thread for: " + OdometryThread.threadType.get());
+		System.out.println("Starting odometry thread for CTRE TalonFX");
 
 		m_gyro = gyro;
 		// Init pose estimator, vision constants default b.c. we already set them when adding a
@@ -166,28 +160,8 @@ public class SwerveSubsystem extends SubsystemBase {
 				(speeds, ff) -> {
 					SwerveModuleState[] states = DriveConstants.kDriveKinematics.toSwerveModuleStates(speeds);
 
-					// Set desired states
-					if (AutoConstants.kUseAutonomousFeedforward) {
-						Force[] forces = ff.linearForces();
-						double[] feedforwards = new double[4];
-						double wheelRad = ModuleConstants.kWheelDiameterMeters / 2;
-
-						// Compute feedforward voltages for each module
-						int idx = 0;
-						for (Force f : forces) {
-							feedforwards[idx] = ModuleConfigs.kPerModuleDriveGearbox.getVoltage(
-									f.in(Newtons) * wheelRad / ModuleConstants.kDrivingMotorReduction,
-									states[idx].speedMetersPerSecond / wheelRad
-											* ModuleConstants.kDrivingMotorReduction);
-							idx++;
-						}
-
-						// Apply the states and feedforward voltages to the modules
-						for (int i = 0; i < 4; i++)
-							m_modules[i].setDesiredStateFF(states[i], feedforwards[i], true);
-					} else {
-						setModuleStates(states);
-					}
+					// Set desired module states
+					setModuleStates(states);
 				},
 				new PPHolonomicDriveController(
 						new PIDConstants(AutoConstants.kPathDriveP, 0.0, AutoConstants.kPathDriveD),
