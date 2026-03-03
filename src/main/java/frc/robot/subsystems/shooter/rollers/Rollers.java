@@ -2,9 +2,10 @@ package frc.robot.subsystems.shooter.rollers;
 
 import static edu.wpi.first.units.Units.Seconds;
 import static edu.wpi.first.units.Units.Volts;
+import static frc.robot.subsystems.shooter.rollers.RollerConstants.kFollowerMotorID;
+import static frc.robot.subsystems.shooter.rollers.RollerConstants.kMainMotorID;
 import static frc.robot.subsystems.shooter.rollers.RollerConstants.kMaxAllowedRPM;
 import static frc.robot.subsystems.shooter.rollers.RollerConstants.kMaxTemperature;
-import static frc.robot.subsystems.shooter.rollers.RollerConstants.kMotorID;
 import static frc.robot.subsystems.shooter.rollers.RollerConstants.kSysIdTimeout;
 import static frc.robot.subsystems.shooter.rollers.RollerConstants.kSysIdVoltageRampRate;
 import static frc.robot.subsystems.shooter.rollers.RollerConstants.kSysIdVoltageStep;
@@ -31,10 +32,15 @@ public class Rollers extends SubsystemBase {
 
 	private double m_setpoint = 0.0;
 
-	private Alert m_motorDisconnectedAlert = new Alert("Roller motor has disconnected! (ID " + kMotorID + ")",
-			AlertType.kError);
-	private Alert m_motorOverheatAlert = new Alert("Roller motor is overheating! (ID: " + kMotorID + ")",
+	private Alert m_mainMotorDisconnectedAlert = new Alert(
+			"Roller main motor has disconnected! (ID " + kMainMotorID + ")", AlertType.kError);
+	private Alert m_mainMotorOverheatAlert = new Alert("Roller main motor is overheating! (ID: " + kMainMotorID + ")",
 			AlertType.kWarning);
+
+	private Alert m_followerMotorDisconnectedAlert = new Alert(
+			"Roller follower motor has disconnected! (ID " + kFollowerMotorID + ")", AlertType.kError);
+	private Alert m_followerMotorOverheatAlert = new Alert(
+			"Roller follower motor is overheating! (ID: " + kFollowerMotorID + ")", AlertType.kWarning);
 
 	private SysIdRoutine m_routine;
 
@@ -67,12 +73,14 @@ public class Rollers extends SubsystemBase {
 
 		if (DriverStation.isDisabled()) { m_io.stop(); m_setpoint = 0; }
 
-		m_motorOverheatAlert.set(m_inputs.temperatureCelsius > kMaxTemperature);
+		m_mainMotorOverheatAlert.set(m_inputs.temperatureCelsiusMain > kMaxTemperature);
+		m_followerMotorOverheatAlert.set(m_inputs.temperatureCelsiusFollower > kMaxTemperature);
 
 		Logger.recordOutput("Rollers/EncodersZeroed", areEncodersZeroed());
 		Logger.recordOutput("Rollers/NearSetpoint", isNearSetpoint());
 
-		m_motorDisconnectedAlert.set(!m_inputs.motorConnected);
+		m_mainMotorDisconnectedAlert.set(!m_inputs.mainMotorConnected);
+		m_followerMotorDisconnectedAlert.set(!m_inputs.followerMotorConnected);
 		Tracer.finish("RollersPeriodic");
 	}
 
@@ -108,7 +116,7 @@ public class Rollers extends SubsystemBase {
 	 * @return Whether the roller is near its setpoint.
 	 */
 	public boolean isNearSetpoint() {
-		return MathUtil.isNear(m_setpoint, m_inputs.rpm, kVelocityDefaultToleranceRPM);
+		return MathUtil.isNear(m_setpoint, m_inputs.rpmMain, kVelocityDefaultToleranceRPM);
 	}
 
 	/**
@@ -123,7 +131,7 @@ public class Rollers extends SubsystemBase {
 	 *
 	 * @return The current angular velocity, in RPM.
 	 */
-	public double getVelocity() { return m_inputs.rpm; }
+	public double getVelocity() { return m_inputs.rpmMain; }
 
 	/**
 	 * Resets the encoders of the rollers. Encoders are set to read 0.

@@ -8,7 +8,6 @@ import com.bobcats.lib.control.shooter.data.ShooterDescriptor;
 import com.bobcats.lib.control.shooter.data.ShooterProjectile;
 import com.bobcats.lib.control.shooter.data.ShooterProjectileType;
 import com.bobcats.lib.math.PhysicsUtil;
-import edu.wpi.first.math.filter.LinearFilter;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Pose3d;
 import edu.wpi.first.math.geometry.Rotation2d;
@@ -22,7 +21,6 @@ import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.math.util.Units;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.Timer;
-import frc.robot.constants.Constants;
 import java.util.ArrayList;
 import java.util.List;
 import org.littletonrobotics.junction.Logger;
@@ -58,13 +56,8 @@ public class ShooterCalculator {
 	 * The record instance for the calculated shot parameters.
 	 */
 	public record ShooterParameters(boolean isValid, Rotation2d turretAngleField, Rotation2d turretAngleRobot,
-			double turretVelocityDegPerSec, double hoodAngleDegs, double hoodVelocityDegPerSec, double rollerSpeedsRPM,
-			double timeOfFlight, Translation3d exitPose, Vector3 exitVelocityVec3, double exitVelocityMetersPerSec) {}
-
-	private final LinearFilter m_turretFilter = LinearFilter.movingAverage((int) (0.1 / Constants.kLoopPeriodSeconds));
-	private final LinearFilter m_hoodFilter = LinearFilter.movingAverage((int) (0.1 / Constants.kLoopPeriodSeconds));
-	private Rotation2d m_lastTurretAngle = null;
-	private double m_lastHoodAngle = Double.NaN;
+			double hoodAngleDegs, double rollerSpeedsRPM, double timeOfFlight, Translation3d exitPose,
+			Vector3 exitVelocityVec3, double exitVelocityMetersPerSec) {}
 
 	private ShooterDescriptor m_descriptor;
 
@@ -95,14 +88,15 @@ public class ShooterCalculator {
 			DriverStation.reportWarning(
 					"WARNING: ShooterCalculator::updateParameters, attempted to calculate without valid interpolators",
 					true);
-			return new ShooterParameters(false, new Rotation2d(), new Rotation2d(), 0.0, 0.0, 0.0, 0.0, 0.0,
-					new Translation3d(), new Vector3(0.0, 0.0, 0.0), 0.0);
+			return new ShooterParameters(false, new Rotation2d(), new Rotation2d(), 0.0, 0.0, 0.0, new Translation3d(),
+					new Vector3(0.0, 0.0, 0.0), 0.0);
 		}
 
 		double dz = target3d.getZ() - m_descriptor.getRobotToTurret().getZ();
 		Transform2d robotToTurret = new Transform2d(m_descriptor.getRobotToTurret().getX(),
 				m_descriptor.getRobotToTurret().getY(), m_descriptor.getRobotToTurret().getRotation().toRotation2d());
-		// Predict robot position after shot delay, assuming constant velocity for very short shotDelay
+		// Predict robot position after shot delay, assuming constant velocity for very
+		// short shotDelay
 		Pose2d robotPosition = robotPosition3d.toPose2d()
 				.exp(new Twist2d(robotVelocity.vxMetersPerSecond * m_descriptor.getShotDelay(),
 						robotVelocity.vyMetersPerSecond * m_descriptor.getShotDelay(),
@@ -139,20 +133,8 @@ public class ShooterCalculator {
 		Rotation2d turretAngleField = target.minus(offsetedPose.getTranslation()).getAngle();
 		Rotation2d turretAngleRobot = turretAngleField.minus(robotAngle);
 		double hoodAngle = Math.toRadians(m_descriptor.getAngleInterpolator().interpolate(offsetedTargetDist, dz));
-		// Make sure params are valid if it's the first call to the function
-		if (m_lastTurretAngle == null) m_lastTurretAngle = turretAngleField;
-		if (Double.isNaN(m_lastHoodAngle)) m_lastHoodAngle = hoodAngle;
-		// Average velocities in rad/s across a short interval
-		// v_A = dA/dt
-		double turretVelocity = turretAngleField.minus(m_lastTurretAngle).getRadians() / Constants.kLoopPeriodSeconds;
-		double hoodVelocity = (hoodAngle - m_lastHoodAngle) / Constants.kLoopPeriodSeconds;
-		// Remove noise from measurements
-		turretVelocity = m_turretFilter.calculate(turretVelocity);
-		hoodVelocity = m_hoodFilter.calculate(hoodVelocity);
 		double rollerVelocityRPM = m_descriptor.getRPMInterpolator().interpolate(offsetedTargetDist, dz);
-		// Update previous state
-		m_lastTurretAngle = turretAngleField;
-		m_lastHoodAngle = hoodAngle;
+
 		boolean isWithinShotBounds = offsetedTargetDist >= m_descriptor.getMinDistance()
 				&& offsetedTargetDist <= m_descriptor.getMaxDistance();
 
@@ -201,15 +183,15 @@ public class ShooterCalculator {
 						&& Math.abs(m_descriptor.getMaxTurretAngle()) < 180))
 			isWithinShotBounds = false;
 
-		// Add turret robot linear velocity contribution to x,y components (field-relative).
+		// Add turret robot linear velocity contribution to x,y components
+		// (field-relative).
 		velVec3 = new Vector3(velVec3.x + vt_x, velVec3.y + vt_y, velVec3.z);
 
 		Logger.recordOutput("ShooterCalculator/TurretAngleRobot", turretAngleRobot);
 		Logger.recordOutput("ShooterCalculator/HoodAngleDeg", Math.toDegrees(hoodAngle));
 
 		// Finally return the updated shot parameters
-		return new ShooterParameters(isWithinShotBounds, turretAngleField, turretAngleRobot,
-				Math.toDegrees(turretVelocity), Math.toDegrees(hoodAngle), Math.toDegrees(hoodVelocity),
+		return new ShooterParameters(isWithinShotBounds, turretAngleField, turretAngleRobot, Math.toDegrees(hoodAngle),
 				rollerVelocityRPM, timeOfFlight, exitPose.getTranslation(), velVec3, velVec3.norm());
 	}
 
@@ -281,8 +263,7 @@ public class ShooterCalculator {
 		velVec3 = new Vector3(velVec3.x + vt_x, velVec3.y + vt_y, velVec3.z);
 
 		return new ShooterParameters(parameters.isValid, turretAngleField, Rotation2d.fromDegrees(turretAngleRobotDeg),
-				parameters.turretVelocityDegPerSec, hoodAngleDeg, parameters.hoodVelocityDegPerSec, rollerRPM, 0,
-				exitPose.getTranslation(), velVec3, exitVelocity);
+				hoodAngleDeg, rollerRPM, 0, exitPose.getTranslation(), velVec3, exitVelocity);
 	}
 
 	/**

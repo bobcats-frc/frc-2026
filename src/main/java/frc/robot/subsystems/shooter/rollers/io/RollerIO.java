@@ -9,13 +9,21 @@ public interface RollerIO {
 	/** The inputs class for the Roller Subsystem. */
 	@AutoLog
 	public class RollerIOInputs {
-		public boolean motorConnected = true;
-		public double appliedVoltage = 0.0;
-		public double rpm = 0.0;
-		public double positionRevs = 0.0;
-		public double supplyCurrentAmps = 0.0;
-		public double statorCurrentAmps = 0.0;
-		public double temperatureCelsius = 0.0;
+		public boolean mainMotorConnected = true;
+		public double appliedVoltageMain = 0.0;
+		public double rpmMain = 0.0;
+		public double positionRevsMain = 0.0;
+		public double supplyCurrentAmpsMain = 0.0;
+		public double statorCurrentAmpsMain = 0.0;
+		public double temperatureCelsiusMain = 0.0;
+
+		public boolean followerMotorConnected = true;
+		public double appliedVoltageFollower = 0.0;
+		public double rpmFollower = 0.0;
+		public double positionRevsFollower = 0.0;
+		public double supplyCurrentAmpsFollower = 0.0;
+		public double statorCurrentAmpsFollower = 0.0;
+		public double temperatureCelsiusFollower = 0.0;
 	}
 
 	/**

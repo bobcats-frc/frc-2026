@@ -20,8 +20,8 @@ public class TurretConstants {
 	// The min angle should be negative, and the max angle should be positive
 	public static final double kMinAngleDeg = -180, kMaxAngleDeg = 180;
 	// Voltage gains, feedforward gains
-	public static final double kP = 0.06, kD = 0.0031, kS = 0, kV = 0;
-	public static final double kPSim = 0.06, kDSim = 0.0031, kSSim = 0, kVSim = 0;
+	public static final double kP = 0.19, kD = 0.0031, kS = 0, kV = 0.008087;
+	public static final double kPSim = 0.19, kDSim = 0.0031, kSSim = 0, kVSim = 0.008087;
 	// public static final double kPSim = 0.11/* 0.315 * 0.8 */, kDSim = 0.004,p
 	// kSSim = 0, kVSim = 0.0026982, kASim = 4.1409E-05; MotionMagic values
 	public static final double kMotionMagicMaxVelocityDegPerSec = 2000;
@@ -41,7 +41,7 @@ public class TurretConstants {
 	public static final double kTurretCalibrationAngle = 180.0;
 
 	// Gearbox reduction
-	public static final double kGearboxReduction = 10; // A 10:1 ratio
+	public static final double kGearboxReduction = 30; // A 10:1 ratio
 
 	// Current limits for the motors
 	public static final double kMotorSupplyLimitAmps = 60.0;

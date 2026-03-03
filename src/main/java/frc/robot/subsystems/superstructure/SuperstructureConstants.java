@@ -96,14 +96,12 @@ public class SuperstructureConstants {
 	// Climb shot parameters, ok to leave some parameters blank since they are
 	// re-calculated in sim, and not used at all in real mode
 	public static final ShooterParameters kClimbedShootingParametersLeftBlue = new ShooterParameters(true,
-			Rotation2d.kZero, Rotation2d.fromDegrees(180 - 17.5), 0, 65, 0, 2300, 0, Translation3d.kZero, Vector3.kZero,
-			0);
+			Rotation2d.kZero, Rotation2d.fromDegrees(180 - 17.5), 65, 2300, 0, Translation3d.kZero, Vector3.kZero, 0);
 	public static final ShooterParameters kClimbedShootingParametersRightBlue = new ShooterParameters(true,
-			Rotation2d.kZero, Rotation2d.fromDegrees(180 + 17.5), 0, 65, 0, 2300, 0, Translation3d.kZero, Vector3.kZero,
-			0);
+			Rotation2d.kZero, Rotation2d.fromDegrees(180 + 17.5), 65, 2300, 0, Translation3d.kZero, Vector3.kZero, 0);
 	// TODO make sure to autoflip
 	public static final ShooterParameters kPresetShootingParametersBlue = new ShooterParameters(true, Rotation2d.kZero,
-			Rotation2d.fromDegrees(180 + 80.5), 0, 65, 0, 2300, 0, Translation3d.kZero, Vector3.kZero, 0);
+			Rotation2d.fromDegrees(180 + 80.5), 65, 2300, 0, Translation3d.kZero, Vector3.kZero, 0);
 
 	public static final int kPreloadedFuelAmount = 8;
 
@@ -156,8 +154,8 @@ public class SuperstructureConstants {
 					.build();
 
 	public static final boolean kLimitVelocityWhenShootingTeleop = true;
-	public static final double kLimitK0 = 1.7;
-	public static final double kLimitK1 = 1.1;
+	public static final double kLimitK0 = 0.9;
+	public static final double kLimitK1 = 1.0;
 
 	// TODO Obtain e coefficient via calibration
 	public static final ShooterProjectileType kFuelProjectile = new ShooterProjectileType(0.000485513987, 0.0050949066,

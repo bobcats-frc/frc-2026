@@ -42,7 +42,7 @@ public class Hood extends SubsystemBase {
 
 	private SysIdRoutine m_routine;
 
-	private static final double kAngleDefaultToleranceDeg = 2.0;
+	private static final double kAngleDefaultToleranceDeg = 4.0;
 
 	/**
 	 * Constructs a new Hood.

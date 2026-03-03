@@ -174,10 +174,9 @@ public class RobotContainer {
 		RobotModeTriggers.autonomous().onFalse(Commands.runOnce(m_autoManager::cancelAuto));
 
 		// Extend climber in teleop when in climbing state to unclimb
-		if (kHasClimb)
-			RobotModeTriggers.teleop()
-					.onTrue(superstructure.climbExtend()
-							.onlyIf(() -> superstructure.getPrimaryState() == PrimaryState.kClimbing));
+		if (kHasClimb) RobotModeTriggers.teleop()
+				.onTrue(superstructure.climbExtend()
+						.onlyIf(() -> superstructure.getPrimaryState() == PrimaryState.kClimbing));
 
 		// Disable objective oriented mode on disable
 		RobotModeTriggers.disabled()
@@ -209,7 +208,8 @@ public class RobotContainer {
 			kDriverExtendClimbKeybind.onTrue(superstructure.climbExtend());
 			kDriverRetractClimbKeybind.onTrue(superstructure.climbRetract());
 			kDriverAutomaticClimbKeybind.whileTrue(superstructure.alignClimberAndClimbCommand()
-					.handleInterrupt(() -> { System.out.println("Align & Climb was interrupted!"); climb.extendArm(); }));
+					.handleInterrupt(
+							() -> { System.out.println("Align & Climb was interrupted!"); climb.extendArm(); }));
 		}
 
 		// Operator Keybinds //

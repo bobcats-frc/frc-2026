@@ -21,10 +21,10 @@ public class HoodConstants {
 	// R: Resistance, kT: Torque coeff., M: Arm mass, r_com: CG distance (meters), G: Reduction
 	// I = T / G*kT, I = M*g*r_com / G*kT, V = IR @ w=0,
 	// Hence kG at horizontal is approx. R*M*r_com*g / G*kT, V(theta) = kG*cos(theta)
-	public static final double kP = 0.14, kD = 0.0036948, kS = 0, kV = 0, kG = 0.3641;
+	public static final double kP = 0.08, kD = 0.0009, kS = 0, kV = 0.034, kG = 0.240;
 	// public static final double kPSim = 0.18, kDSim = 0.006, kSSim = 0, kVSim = 0, kGSim =
 	// 0.3641;
-	public static final double kPSim = 0.14, kDSim = 0.0036948, kSSim = 0, kVSim = 0, kGSim = 0.337;// 0.3641;
+	public static final double kPSim = 0.08, kDSim = 0.0009, kSSim = 0, kVSim = 0.034, kGSim = 0.240;
 	// MotionMagic values
 	public static final double kMotionMagicMaxVelocityDegPerSec = 720 * 3.0;
 	public static final double kMotionMagicAccelerationDegPerSecSq = 1440 * 3.0;
@@ -43,7 +43,7 @@ public class HoodConstants {
 	public static final double kHoodCalibrationAngle = kMinAngleDeg;
 
 	// Gearbox reduction
-	public static final double kGearboxReduction = 4; // A 4:1 ratio (I/O)
+	public static final double kGearboxReduction = 300.0 / 24.0; // A 4:1 ratio (I/O)
 
 	// Current limits for the motors
 	public static final double kMotorSupplyLimitAmps = 50.0;
@@ -55,6 +55,6 @@ public class HoodConstants {
 	// Simulation data
 	public static final DCMotor kGearbox = DCMotor.getKrakenX44Foc(1);
 	public static final double kCenterOfMassDistance = 0.169; // meters
-	public static final double kMomentOfInertia = 0.0277 / 4.0;
+	public static final double kMomentOfInertia = 0.031090146;
 	public static final Transform3d kHoodCentralPivotRobotRelative = Transform3d.kZero;
 }

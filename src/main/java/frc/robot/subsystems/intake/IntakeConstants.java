@@ -19,8 +19,8 @@ public class IntakeConstants {
 	public static final double kOuttakeRollerVoltage = -3.5;
 	// Arm PID
 	// Units: Volts, Degrees
-	public static final double kP = 0.05, kD = 0, kG = 0;
-	public static final double kPSim = 0.05, kDSim = 0, kGSim = 0;
+	public static final double kP = 0.01, kD = 0.001, kG = 0;
+	public static final double kPSim = 0.01, kDSim = 0.001, kGSim = 0;
 	public static final double kMotionMagicMaxVelocityDegPerSec = 720;
 	public static final double kMotionMagicAccelerationDegPerSecSq = 2880 * 2;
 	// The angle at which the encoders are zeroed, the angle at the start of the match
@@ -31,9 +31,10 @@ public class IntakeConstants {
 	public static final double kArmMaxTemperature = 80;
 	public static final double kRollerMaxTemperature = 80;
 
+	// TODO exact values
 	// Gearbox reduction
 	public static final double kRollerGearboxReduction = 1; // A 1:1 ratio (I/O)
-	public static final double kArmGearboxReduction = 5; // A 5:1 ratio (I/O)
+	public static final double kArmGearboxReduction = 2.0 / 3.0; // A 5:1 ratio (I/O)
 
 	// Current limits for the motor
 	public static final double kRollerMotorSupplyLimitAmps = 20.0;

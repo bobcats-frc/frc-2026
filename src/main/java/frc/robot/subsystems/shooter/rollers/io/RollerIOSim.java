@@ -15,13 +15,14 @@ import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.math.controller.SimpleMotorFeedforward;
 import edu.wpi.first.math.system.plant.LinearSystemId;
 import org.ironmaple.simulation.SimulatedArena;
+import org.littletonrobotics.junction.Logger;
 
 /** The IO sim implementation for roller hardware interacions without any hardware. */
 public class RollerIOSim implements RollerIO {
 	private CustomDCMotorSim m_sim;
 
 	// Control objects
-	private PIDController m_pid = new PIDController(kPSim, kDSim, 0.0);
+	private PIDController m_pid = new PIDController(kPSim, 0.0, kDSim);
 	private SimpleMotorFeedforward m_ff = new SimpleMotorFeedforward(kSSim, kVSim);
 	private double m_closedLoopSetpoint;
 	private boolean m_isSetpoint = false;
@@ -50,14 +51,25 @@ public class RollerIOSim implements RollerIO {
 			m_sim.setInputVoltage(pidOutput + ffOutput);
 		}
 
+		Logger.recordOutput("Rollers/SimPIDSetpoint", m_pid.getSetpoint());
+		Logger.recordOutput("Rollers/SimIsSetpoint", m_isSetpoint);
+
 		// Update inputs
-		inputs.motorConnected = true;
-		inputs.appliedVoltage = m_sim.getAppliedInputVoltage();
-		inputs.rpm = m_sim.getOutputAngularVelocityRPM();
-		inputs.positionRevs = m_sim.getOutputAngularPositionRotations();
-		inputs.supplyCurrentAmps = Math.abs(m_sim.getSupplyCurrentDrawAmps());
-		inputs.statorCurrentAmps = Math.abs(m_sim.getStatorCurrentDrawAmps());
-		inputs.temperatureCelsius = 20;
+		inputs.mainMotorConnected = true;
+		inputs.appliedVoltageMain = m_sim.getAppliedInputVoltage();
+		inputs.rpmMain = m_sim.getOutputAngularVelocityRPM();
+		inputs.positionRevsMain = m_sim.getOutputAngularPositionRotations();
+		inputs.supplyCurrentAmpsMain = Math.abs(m_sim.getSupplyCurrentDrawAmps());
+		inputs.statorCurrentAmpsMain = Math.abs(m_sim.getStatorCurrentDrawAmps());
+		inputs.temperatureCelsiusMain = 20;
+
+		inputs.followerMotorConnected = true;
+		inputs.appliedVoltageFollower = m_sim.getAppliedInputVoltage();
+		inputs.rpmFollower = m_sim.getOutputAngularVelocityRPM();
+		inputs.positionRevsFollower = m_sim.getOutputAngularPositionRotations();
+		inputs.supplyCurrentAmpsFollower = Math.abs(m_sim.getSupplyCurrentDrawAmps());
+		inputs.statorCurrentAmpsFollower = Math.abs(m_sim.getStatorCurrentDrawAmps());
+		inputs.temperatureCelsiusFollower = 20;
 	}
 
 	@Override

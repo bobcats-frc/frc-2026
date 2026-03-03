@@ -9,13 +9,14 @@ import edu.wpi.first.math.system.plant.DCMotor;
  */
 public class RollerConstants {
 	// Motor IDs
-	public static final int kMotorID = 20;
+	public static final int kMainMotorID = 20;
+	public static final int kFollowerMotorID = 22;
 	public static final String kMotorCANBus = ""; // Main RIO bus
 
 	// Control constants (PID-SVA)
 	// Units: Volts, RPM
-	public static final double kP = 0.0104, kD = 5.28e-5, kS = 0.0, kV = 0.0015448;
-	public static final double kPSim = 0.0104, kDSim = 5.28e-5, kSSim = 0.0, kVSim = 0.0015448;
+	public static final double kP = 0.001, kD = 0, kS = 0.0, kV = 0.0020594;
+	public static final double kPSim = 0.001, kDSim = 0, kSSim = 0.0, kVSim = 0.0020594;
 	public static final boolean kIsFOC = true;
 
 	public static final double kMaxTemperature = 80;
@@ -25,10 +26,10 @@ public class RollerConstants {
 	public static final double kSysIdTimeout = 5;
 
 	// Soft-max, not the hardware limit RPM
-	public static final double kMaxAllowedRPM = 9000;
+	public static final double kMaxAllowedRPM = 4500;
 
 	// Gearbox reduction
-	public static final double kGearboxReduction = 0.75; // A 3:4 ratio (I/O)
+	public static final double kGearboxReduction = 1.0; // A 1:1 ratio (I/O)
 
 	// Current limits for the motors
 	public static final double kMotorSupplyLimitAmps = 50.0;
@@ -36,8 +37,9 @@ public class RollerConstants {
 
 	// Inversions
 	public static final boolean kMotorInverted = false;
+	public static final boolean kFollowerOpposesMain = true;
 
 	// Simulation data
-	public static final DCMotor kGearbox = DCMotor.getKrakenX60Foc(1);
-	public static final double kMomentOfInertia = 0.000774324522;
+	public static final DCMotor kGearbox = DCMotor.getKrakenX60Foc(2);
+	public static final double kMomentOfInertia = 0.000367211;
 }

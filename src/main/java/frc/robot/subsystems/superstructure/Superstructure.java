@@ -167,7 +167,7 @@ public class Superstructure extends SubsystemBase {
 	// Shooter state data
 	private final ShooterCalculator m_shooterCalculator;
 	private ShooterParameters m_latestParameters = new ShooterParameters(false,
-			Rotation2d.fromDegrees(kHoodCalibrationAngle), Rotation2d.kZero, 0, kHoodCalibrationAngle, 0, 0, 0,
+			Rotation2d.fromDegrees(kHoodCalibrationAngle), Rotation2d.kZero, 0, kHoodCalibrationAngle, 0,
 			Translation3d.kZero, Vector3.kZero, 0);
 	private List<ShooterProjectile> m_projectiles = new ArrayList<>();
 	private double m_lastFuelShotSim = 0;
@@ -287,7 +287,8 @@ public class Superstructure extends SubsystemBase {
 			m_hasClimbed = Math.abs(Math.toDegrees(pose.getRotation().getY())) >= kClimbPitchAngleDiffThreshold;
 			Logger.recordOutput("Superstructure/SimHopperFuelCount", m_intakeSim.getGamePiecesAmount());
 		} else {
-			m_hasClimbed = Math.abs(m_swerve.getGyro().getInputs().pitchDegrees) >= kClimbPitchAngleDiffThreshold && kHasClimb;
+			m_hasClimbed = Math.abs(m_swerve.getGyro().getInputs().pitchDegrees) >= kClimbPitchAngleDiffThreshold
+					&& kHasClimb;
 		}
 
 		if (m_hasClimbed && m_primaryState != PrimaryState.kIntaking && m_primaryState != PrimaryState.kOuttaking) {
@@ -541,11 +542,12 @@ public class Superstructure extends SubsystemBase {
 		return Commands.runOnce(() -> m_actionState = ActionState.kScoreFuelHub)
 				.andThen(new DeferredCommand(
 						() -> shooterCommand(this::getAllianceHubLocation,
-								() -> SeasonUtils.getTimeUntilHubShift() <= m_latestParameters.timeOfFlight()
+								() -> (SeasonUtils.getTimeUntilHubShift() <= m_latestParameters.timeOfFlight()
 										+ kShootingFlightTimeFudgeFactors.get(getAllianceHubLocation().getDistance(
 												new Translation3d(m_swerve.getFilteredPose().getTranslation())))
 										&& Timer.getFPGATimestamp()
-												- m_lastShooterUpdate <= kShooterStateStaleTimeThreshold),
+												- m_lastShooterUpdate <= kShooterStateStaleTimeThreshold) ? true
+														: SeasonUtils.isAllianceHubActive()),
 						Set.of(m_turret, m_rollers, m_hood, m_feeder)))
 				.onlyWhile(() -> m_isObjectiveOriented /* && m_primaryState != PrimaryState.kClimbing */
 						&& m_actionState == ActionState.kScoreFuelHub /* ActionState.kActionIdle */
@@ -864,8 +866,7 @@ public class Superstructure extends SubsystemBase {
 
 		return new ShooterParameters(blueRelativeParams.isValid(),
 				blueRelativeParams.turretAngleField().plus(Rotation2d.kPi), blueRelativeParams.turretAngleRobot(),
-				blueRelativeParams.turretVelocityDegPerSec(), blueRelativeParams.hoodAngleDegs(),
-				blueRelativeParams.hoodVelocityDegPerSec(), blueRelativeParams.rollerSpeedsRPM(),
+				blueRelativeParams.hoodAngleDegs(), blueRelativeParams.rollerSpeedsRPM(),
 				blueRelativeParams.timeOfFlight(), AllianceUtil.flipWithAlliance(blueRelativeParams.exitPose()),
 				new Vector3(-blueRelativeParams.exitVelocityVec3().x, blueRelativeParams.exitVelocityVec3().y,
 						blueRelativeParams.exitVelocityVec3().z),

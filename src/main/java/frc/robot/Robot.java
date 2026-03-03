@@ -240,7 +240,6 @@ public class Robot extends LoggedRobot {
 		CommandScheduler.getInstance().cancelAll();
 		// Assign and schedule the test command
 		CommandScheduler.getInstance().schedule(m_testCommand = m_robotContainer.getTestCommand());
-		RobotContainer.getInstance().turret.setTurretAngle(100);
 	}
 
 	@Override
