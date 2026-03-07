@@ -238,7 +238,7 @@ public class SwerveModuleIOKraken implements SwerveModuleIO {
 
 	@Override
 	public void runTurnPosition(Rotation2d rotation) {
-		m_turnTalon.setControl(m_turnVoltage.withPosition(Units.radiansToRotations(rotation.getRadians())));
+		m_turnTalon.setControl(m_turnVoltage.withPosition(rotation.getRotations()));
 	}
 
 	@Override

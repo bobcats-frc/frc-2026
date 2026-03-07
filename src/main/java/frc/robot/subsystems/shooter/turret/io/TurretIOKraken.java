@@ -1,10 +1,5 @@
 package frc.robot.subsystems.shooter.turret.io;
 
-import static edu.wpi.first.units.Units.Amps;
-import static edu.wpi.first.units.Units.Celsius;
-import static edu.wpi.first.units.Units.RPM;
-import static edu.wpi.first.units.Units.Revolutions;
-import static edu.wpi.first.units.Units.Volts;
 import static frc.robot.subsystems.shooter.hood.HoodConstants.kHoodCalibrationAngle;
 import static frc.robot.subsystems.shooter.turret.TurretConstants.kD;
 import static frc.robot.subsystems.shooter.turret.TurretConstants.kGearboxReduction;
@@ -98,12 +93,12 @@ public class TurretIOKraken implements TurretIO {
 		inputs.motorConnected = m_motorConnectedDebouncer.calculate(BaseStatusSignal
 				.refreshAll(m_voltsSignal, m_rpmSignal, m_positionSignal, m_supplySignal, m_statorSignal, m_tempSignal)
 				.isOK());
-		inputs.appliedVoltage = m_voltsSignal.getValue().in(Volts);
-		inputs.rpm = m_rpmSignal.getValue().in(RPM);
-		inputs.positionDegrees = Units.rotationsToDegrees(m_positionSignal.getValue().in(Revolutions));
-		inputs.supplyCurrentAmps = m_supplySignal.getValue().in(Amps);
-		inputs.statorCurrentAmps = m_statorSignal.getValue().in(Amps);
-		inputs.temperatureCelsius = m_tempSignal.getValue().in(Celsius);
+		inputs.appliedVoltage = m_voltsSignal.getValueAsDouble();
+		inputs.rpm = m_rpmSignal.getValueAsDouble() * 60.0;
+		inputs.positionDegrees = Units.rotationsToDegrees(m_positionSignal.getValueAsDouble());
+		inputs.supplyCurrentAmps = Math.abs(m_supplySignal.getValueAsDouble());
+		inputs.statorCurrentAmps = Math.abs(m_statorSignal.getValueAsDouble());
+		inputs.temperatureCelsius = m_tempSignal.getValueAsDouble();
 	}
 
 	@Override

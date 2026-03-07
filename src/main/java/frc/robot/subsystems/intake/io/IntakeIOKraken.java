@@ -1,10 +1,5 @@
 package frc.robot.subsystems.intake.io;
 
-import static edu.wpi.first.units.Units.Amps;
-import static edu.wpi.first.units.Units.Celsius;
-import static edu.wpi.first.units.Units.RPM;
-import static edu.wpi.first.units.Units.Revolutions;
-import static edu.wpi.first.units.Units.Volts;
 import static frc.robot.subsystems.intake.IntakeConstants.kArmCalibrationAngleDeg;
 import static frc.robot.subsystems.intake.IntakeConstants.kArmGearboxReduction;
 import static frc.robot.subsystems.intake.IntakeConstants.kArmMotorCANBus;
@@ -15,6 +10,8 @@ import static frc.robot.subsystems.intake.IntakeConstants.kArmMotorSupplyLimitAm
 import static frc.robot.subsystems.intake.IntakeConstants.kD;
 import static frc.robot.subsystems.intake.IntakeConstants.kG;
 import static frc.robot.subsystems.intake.IntakeConstants.kIsFOC;
+import static frc.robot.subsystems.intake.IntakeConstants.kMotionMagicAccelerationDegPerSecSq;
+import static frc.robot.subsystems.intake.IntakeConstants.kMotionMagicMaxVelocityDegPerSec;
 import static frc.robot.subsystems.intake.IntakeConstants.kP;
 import static frc.robot.subsystems.intake.IntakeConstants.kRollerGearboxReduction;
 import static frc.robot.subsystems.intake.IntakeConstants.kRollerMotorCANBus;
@@ -89,6 +86,8 @@ public class IntakeIOKraken implements IntakeIO {
 		armMotorConfig.Slot0.kD = kD * 360.0;
 		armMotorConfig.Slot0.kG = kG;
 		armMotorConfig.Slot0.GravityType = GravityTypeValue.Arm_Cosine;
+		armMotorConfig.MotionMagic.MotionMagicCruiseVelocity = kMotionMagicMaxVelocityDegPerSec / 360.0;
+		armMotorConfig.MotionMagic.MotionMagicAcceleration = kMotionMagicAccelerationDegPerSecSq / 360.0;
 		armMotorConfig.ClosedLoopGeneral.ContinuousWrap = true;
 
 		TalonUtils.retryUntilOk(() -> m_armTalon.getConfigurator().apply(armMotorConfig), 3,
@@ -136,24 +135,24 @@ public class IntakeIOKraken implements IntakeIO {
 						.refreshAll(m_rollerVoltsSignal, m_rollerRpmSignal, m_rollerSupplySignal, m_rollerStatorSignal,
 								m_rollerTempSignal)
 						.isOK());
-		inputs.rollerAppliedVoltage = m_rollerVoltsSignal.getValue().in(Volts);
-		inputs.rollerRpm = m_rollerRpmSignal.getValue().in(RPM);
-		inputs.rollerSupplyCurrentAmps = m_rollerSupplySignal.getValue().in(Amps);
-		inputs.rollerStatorCurrentAmps = m_rollerStatorSignal.getValue().in(Amps);
-		inputs.rollerTemperatureCelsius = m_rollerTempSignal.getValue().in(Celsius);
+		inputs.rollerAppliedVoltage = m_rollerVoltsSignal.getValueAsDouble();
+		inputs.rollerRpm = m_rollerRpmSignal.getValueAsDouble() * 60.0;
+		inputs.rollerSupplyCurrentAmps = Math.abs(m_rollerSupplySignal.getValueAsDouble());
+		inputs.rollerStatorCurrentAmps = Math.abs(m_rollerStatorSignal.getValueAsDouble());
+		inputs.rollerTemperatureCelsius = m_rollerTempSignal.getValueAsDouble();
 
 		inputs.armMotorConnected = m_armMotorConnectedDebouncer.calculate(
 				BaseStatusSignal
 						.refreshAll(m_armVoltsSignal, m_armRpmSignal, m_armPositionSignal, m_armSupplySignal,
 								m_armStatorSignal, m_armTempSignal)
 						.isOK());
-		inputs.armAppliedVoltage = m_armVoltsSignal.getValue().in(Volts);
-		inputs.armRpm = m_armRpmSignal.getValue().in(RPM);
+		inputs.armAppliedVoltage = m_armVoltsSignal.getValueAsDouble();
+		inputs.armRpm = m_armRpmSignal.getValueAsDouble() * 60.0;
 		inputs.armPositionDegrees = MathUtil
-				.inputModulus(Units.rotationsToDegrees(m_armPositionSignal.getValue().in(Revolutions)), -180, 180);
-		inputs.armSupplyCurrentAmps = m_armSupplySignal.getValue().in(Amps);
-		inputs.armStatorCurrentAmps = m_armStatorSignal.getValue().in(Amps);
-		inputs.armTemperatureCelsius = m_armTempSignal.getValue().in(Celsius);
+				.inputModulus(Units.rotationsToDegrees(m_armPositionSignal.getValueAsDouble()), -180, 180);
+		inputs.armSupplyCurrentAmps = Math.abs(m_armSupplySignal.getValueAsDouble());
+		inputs.armStatorCurrentAmps = Math.abs(m_armStatorSignal.getValueAsDouble());
+		inputs.armTemperatureCelsius = m_armTempSignal.getValueAsDouble();
 	}
 
 	@Override

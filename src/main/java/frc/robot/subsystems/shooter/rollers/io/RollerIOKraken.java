@@ -1,10 +1,5 @@
 package frc.robot.subsystems.shooter.rollers.io;
 
-import static edu.wpi.first.units.Units.Amps;
-import static edu.wpi.first.units.Units.Celsius;
-import static edu.wpi.first.units.Units.RPM;
-import static edu.wpi.first.units.Units.Revolutions;
-import static edu.wpi.first.units.Units.Volts;
 import static frc.robot.subsystems.shooter.rollers.RollerConstants.kD;
 import static frc.robot.subsystems.shooter.rollers.RollerConstants.kFollowerMotorID;
 import static frc.robot.subsystems.shooter.rollers.RollerConstants.kFollowerOpposesMain;
@@ -124,24 +119,24 @@ public class RollerIOKraken implements RollerIO {
 		inputs.mainMotorConnected = m_mainMotorConnectedDebouncer.calculate(
 				BaseStatusSignal.refreshAll(m_voltsSignal, m_rpmSignal, m_supplySignal, m_statorSignal, m_tempSignal)
 						.isOK());
-		inputs.appliedVoltageMain = m_voltsSignal.getValue().in(Volts);
-		inputs.rpmMain = m_rpmSignal.getValue().in(RPM);
-		inputs.positionRevsMain = m_positionSignal.getValue().in(Revolutions);
-		inputs.supplyCurrentAmpsMain = Math.abs(m_supplySignal.getValue().in(Amps));
-		inputs.statorCurrentAmpsMain = Math.abs(m_statorSignal.getValue().in(Amps));
-		inputs.temperatureCelsiusMain = m_tempSignal.getValue().in(Celsius);
+		inputs.appliedVoltageMain = m_voltsSignal.getValueAsDouble();
+		inputs.rpmMain = m_rpmSignal.getValueAsDouble() * 60.0;
+		inputs.positionRevsMain = m_positionSignal.getValueAsDouble();
+		inputs.supplyCurrentAmpsMain = Math.abs(m_supplySignal.getValueAsDouble());
+		inputs.statorCurrentAmpsMain = Math.abs(m_statorSignal.getValueAsDouble());
+		inputs.temperatureCelsiusMain = m_tempSignal.getValueAsDouble();
 
 		inputs.followerMotorConnected = m_followerMotorConnectedDebouncer.calculate(
 				BaseStatusSignal
 						.refreshAll(m_voltsSignalFollower, m_rpmSignalFollower, m_supplySignalFollower,
 								m_statorSignalFollower, m_tempSignalFollower)
 						.isOK());
-		inputs.appliedVoltageFollower = m_voltsSignalFollower.getValue().in(Volts);
-		inputs.rpmFollower = m_rpmSignalFollower.getValue().in(RPM);
-		inputs.positionRevsFollower = m_positionSignalFollower.getValue().in(Revolutions);
-		inputs.supplyCurrentAmpsFollower = Math.abs(m_supplySignalFollower.getValue().in(Amps));
-		inputs.statorCurrentAmpsFollower = Math.abs(m_statorSignalFollower.getValue().in(Amps));
-		inputs.temperatureCelsiusFollower = m_tempSignalFollower.getValue().in(Celsius);
+		inputs.appliedVoltageFollower = m_voltsSignalFollower.getValueAsDouble();
+		inputs.rpmFollower = m_rpmSignalFollower.getValueAsDouble() * 60.0;
+		inputs.positionRevsFollower = m_positionSignalFollower.getValueAsDouble();
+		inputs.supplyCurrentAmpsFollower = Math.abs(m_supplySignalFollower.getValueAsDouble());
+		inputs.statorCurrentAmpsFollower = Math.abs(m_statorSignalFollower.getValueAsDouble());
+		inputs.temperatureCelsiusFollower = m_tempSignalFollower.getValueAsDouble();
 	}
 
 	@Override

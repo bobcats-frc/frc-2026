@@ -1,10 +1,5 @@
 package frc.robot.subsystems.shooter.hood.io;
 
-import static edu.wpi.first.units.Units.Amps;
-import static edu.wpi.first.units.Units.Celsius;
-import static edu.wpi.first.units.Units.RPM;
-import static edu.wpi.first.units.Units.Revolutions;
-import static edu.wpi.first.units.Units.Volts;
 import static frc.robot.subsystems.shooter.hood.HoodConstants.kD;
 import static frc.robot.subsystems.shooter.hood.HoodConstants.kG;
 import static frc.robot.subsystems.shooter.hood.HoodConstants.kGearboxReduction;
@@ -105,13 +100,13 @@ public class HoodIOKraken implements HoodIO {
 		inputs.motorConnected = m_motorConnectedDebouncer.calculate(BaseStatusSignal
 				.refreshAll(m_voltsSignal, m_rpmSignal, m_positionSignal, m_supplySignal, m_statorSignal, m_tempSignal)
 				.isOK());
-		inputs.appliedVoltage = m_voltsSignal.getValue().in(Volts);
-		inputs.rpm = m_rpmSignal.getValue().in(RPM);
+		inputs.appliedVoltage = m_voltsSignal.getValueAsDouble();
+		inputs.rpm = m_rpmSignal.getValueAsDouble() * 60.0;
 		inputs.positionDegrees = MathUtil
-				.inputModulus(Units.rotationsToDegrees(m_positionSignal.getValue().in(Revolutions)), -180, 180);
-		inputs.supplyCurrentAmps = Math.abs(m_supplySignal.getValue().in(Amps));
-		inputs.statorCurrentAmps = Math.abs(m_statorSignal.getValue().in(Amps));
-		inputs.temperatureCelsius = m_tempSignal.getValue().in(Celsius);
+				.inputModulus(Units.rotationsToDegrees(m_positionSignal.getValueAsDouble()), -180, 180);
+		inputs.supplyCurrentAmps = Math.abs(m_supplySignal.getValueAsDouble());
+		inputs.statorCurrentAmps = Math.abs(m_statorSignal.getValueAsDouble());
+		inputs.temperatureCelsius = m_tempSignal.getValueAsDouble();
 	}
 
 	@Override
