@@ -102,8 +102,8 @@ public class HoodIOKraken implements HoodIO {
 				.isOK());
 		inputs.appliedVoltage = m_voltsSignal.getValueAsDouble();
 		inputs.rpm = m_rpmSignal.getValueAsDouble() * 60.0;
-		inputs.positionDegrees = MathUtil
-				.inputModulus(Units.rotationsToDegrees(m_positionSignal.getValueAsDouble()), -180, 180);
+		inputs.positionDegrees = MathUtil.inputModulus(Units.rotationsToDegrees(m_positionSignal.getValueAsDouble()),
+				-180, 180);
 		inputs.supplyCurrentAmps = Math.abs(m_supplySignal.getValueAsDouble());
 		inputs.statorCurrentAmps = Math.abs(m_statorSignal.getValueAsDouble());
 		inputs.temperatureCelsius = m_tempSignal.getValueAsDouble();

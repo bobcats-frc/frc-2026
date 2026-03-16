@@ -22,6 +22,7 @@ import static frc.robot.subsystems.swerve.SwerveConstants.ModuleConfigs.kRearLef
 import static frc.robot.subsystems.swerve.SwerveConstants.ModuleConfigs.kRearRightEncoderOffset;
 import static frc.robot.subsystems.swerve.SwerveConstants.ModuleConfigs.kTurningConfig;
 import static frc.robot.subsystems.swerve.SwerveConstants.ModuleConstants.kWheelDiameterMeters;
+import static frc.robot.subsystems.swerve.SwerveConstants.cloneDriveConfig;
 import static frc.robot.subsystems.swerve.SwerveConstants.cloneTurnConfig;
 import static frc.robot.subsystems.swerve.SwerveConstants.kDrivetrainBus;
 
@@ -102,8 +103,10 @@ public class SwerveModuleIOKraken implements SwerveModuleIO {
 			case 3 -> kRearRightDrivingCanId;
 			default -> 0;
 		}, kDrivetrainBus);
-		retryUntilOk(() -> m_driveTalon.getConfigurator().apply(kDrivingConfig), 5,
-				"Configuring Mk5n module #" + idx + " - drive motor");
+		retryUntilOk(
+				() -> m_driveTalon.getConfigurator()
+						.apply(cloneDriveConfig(kDrivingConfig, idx == 1 || idx == 3 ? true : false)),
+				5, "Configuring Mk5n module #" + idx + " - drive motor");
 
 		// Create && configure CANCoder
 		int cancoderId = switch (idx) {

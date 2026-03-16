@@ -6,6 +6,7 @@ package frc.robot;
 
 import static edu.wpi.first.units.Units.Amps;
 import static frc.robot.subsystems.shooter.hood.HoodConstants.kExitAngleOffset;
+import static frc.robot.subsystems.shooter.hood.HoodConstants.kHoodCalibrationAngle;
 import static frc.robot.subsystems.superstructure.SuperstructureConstants.kMechanismMovementControllerRumbleStrength;
 
 import com.bobcats.lib.container.LoggedTunableNumber;
@@ -16,7 +17,6 @@ import com.bobcats.lib.utils.Utils;
 import com.pathplanner.lib.commands.PathfindingCommand;
 import com.pathplanner.lib.util.FlippingUtil;
 import edu.wpi.first.hal.AllianceStationID;
-import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.wpilibj.Alert;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.RobotController;
@@ -145,7 +145,7 @@ public class Robot extends LoggedRobot {
 		m_scheduleLogger = Utils.registerLoopTimeLogger(this);
 
 		// Default overrides
-		SmartDashboard.putNumber("HoodOverrideAngle", 0);
+		SmartDashboard.putNumber("HoodOverrideAngle", kHoodCalibrationAngle);
 		SmartDashboard.putNumber("RollerOverrideRPM", 0);
 	}
 
@@ -282,9 +282,7 @@ public class Robot extends LoggedRobot {
 		SimulatedArena.getInstance().simulationPeriodic();
 
 		// Log latest field state
-		Pose2d pose2d = m_robotContainer.swerveSim.getSimulatedDriveTrainPose();
-		Logger.recordOutput("FieldSimulation/RobotPosition",
-				m_robotContainer.superstructure.superstructureVisualizer.getRobotPoseWithHeight(pose2d));
+		Logger.recordOutput("FieldSimulation/RobotPosition", m_robotContainer.swerveSim.getSimulatedDriveTrainPose());
 		Logger.recordOutput("FieldSimulation/Fuel", SimulatedArena.getInstance().getGamePiecesArrayByType("Fuel"));
 		Tracer.finish("SimulationPeriodic");
 	}

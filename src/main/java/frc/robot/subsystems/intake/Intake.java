@@ -5,6 +5,7 @@ import static frc.robot.subsystems.intake.IntakeConstants.kArmClosedAngle;
 import static frc.robot.subsystems.intake.IntakeConstants.kArmMaxTemperature;
 import static frc.robot.subsystems.intake.IntakeConstants.kArmMotorID;
 import static frc.robot.subsystems.intake.IntakeConstants.kArmOpenedAngle;
+import static frc.robot.subsystems.intake.IntakeConstants.kArmPushFuelAngle;
 import static frc.robot.subsystems.intake.IntakeConstants.kIntakeRollerVoltage;
 import static frc.robot.subsystems.intake.IntakeConstants.kOuttakeRollerVoltage;
 import static frc.robot.subsystems.intake.IntakeConstants.kRollerMaxTemperature;
@@ -81,6 +82,13 @@ public class Intake extends SubsystemBase {
 	 */
 	public void openIntake() {
 		setIntakeAngle(kArmOpenedAngle);
+	}
+
+	/**
+	 * Sets the arm to the peak arm feed oscillation position to push stuck fuel into the hopper.
+	 */
+	public void intakePushAngle() {
+		setIntakeAngle(kArmPushFuelAngle);
 	}
 
 	/**

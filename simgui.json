@@ -18,10 +18,12 @@
       "/SmartDashboard/Autonomous Objective #1 to #2 Cooldown": "String Chooser",
       "/SmartDashboard/Autonomous Objective #2": "String Chooser",
       "/SmartDashboard/Autonomous Override Bump Cross": "String Chooser",
+      "/SmartDashboard/Autonomous Parking": "String Chooser",
       "/SmartDashboard/Autonomous Pass Through Tower": "String Chooser",
       "/SmartDashboard/Autonomous Pass Through Tower Objective #1": "String Chooser",
       "/SmartDashboard/Autonomous Pass Through Tower Objective #2": "String Chooser",
       "/SmartDashboard/Autonomous PathPlanner Routines": "String Chooser",
+      "/SmartDashboard/Autonomous Score First 8 Fuel": "String Chooser",
       "/SmartDashboard/Autonomous Scoring": "String Chooser",
       "/SmartDashboard/Autonomous Should Score": "String Chooser",
       "/SmartDashboard/Autonomous Starting Point": "String Chooser",
@@ -34,6 +36,7 @@
       "/SmartDashboard/PhotonAlerts": "Alerts",
       "/SmartDashboard/Test Override Hood Setpoints": "String Chooser",
       "/SmartDashboard/Test Override Roller Setpoints": "String Chooser",
+      "/SmartDashboard/Test Override Turret Setpoints": "String Chooser",
       "/SmartDashboard/VisionSystemSim-main/Sim Field": "Field2d",
       "/SmartDashboard/VisionSystemSim-main_objDet_Fuel/Sim Field": "Field2d"
     }

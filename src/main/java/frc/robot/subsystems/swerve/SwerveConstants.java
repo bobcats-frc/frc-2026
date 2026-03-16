@@ -57,7 +57,7 @@ public final class SwerveConstants {
 	public static final class DriveConstants {
 		// Maximum allowed speeds (not nescessarily the hardware max)
 		public static final double kMaxSpeedMetersPerSecond = 4.5; // m/s
-		public static final double kMaxAngularSpeed = 4.0 * Math.PI; // rad/s
+		public static final double kMaxAngularSpeed = Math.toRadians(720); // rad/s
 
 		// Note: if either is infinite, the other is also considered to be infinite.
 		// public static final double kMaxLinearAcceleration = Double.POSITIVE_INFINITY; // m/s^2
@@ -121,7 +121,7 @@ public final class SwerveConstants {
 		// the value closer
 		// to 0
 		// * For precision, use the identification command
-		public static final double kSkewCorrectionFactor = 0.06508;
+		public static final double kSkewCorrectionFactor = 0.04671;
 
 		// Apply a velocity deadband to prevent jittering
 		public static final double kJitterVelocityDeadbandMps = 2E-3;
@@ -165,8 +165,15 @@ public final class SwerveConstants {
 		public static final double kPathDriveP = 4;
 		public static final double kPathDriveD = 0;
 
-		public static final double kPathTurnP = 6;
-		public static final double kPathTurnD = 0;
+		public static final double kPathTurnP = 15;
+		public static final double kPathTurnD = 0.15;
+
+		public static final double kPathDrivePSim = 4;
+		public static final double kPathDriveDSim = 0;
+
+		// 2pi rad -> 4pi rad/s
+		public static final double kPathTurnPSim = 10;
+		public static final double kPathTurnDSim = 0;
 
 		public static final PathConstraints kPathConstraints = new PathConstraints(4.45, 5, Math.toRadians(540),
 				Math.toRadians(720));
@@ -197,7 +204,7 @@ public final class SwerveConstants {
 		public static final Pigeon2Configuration kGyroConfig = new Pigeon2Configuration();
 
 		// Whether the motor is a FOC motor (only on phoenix pro)
-		public static final boolean kIsFOC = true;
+		public static final boolean kIsFOC = false;
 
 		// The gearbox used on each Mk5n module (ignoring reductions)
 		// Kraken X60 motor
@@ -211,17 +218,19 @@ public final class SwerveConstants {
 		// Units:
 		// Drive: V / (m/s)
 		// Turn: V / (rad/s)
-		public static final double kDriveP = 2/* 0.04 */, kDriveD = 0;
-		public static final double kTurnP = 1, kTurnD = 0;
+		public static final double kDriveP = 0.94/* 0.04 */, kDriveD = 0;
+		public static final double kTurnP = 10, kTurnD = 0;
 
 		public static final double kDrivePSim = 10, kDriveDSim = 0;
-		public static final double kTurnPSim = 8, kTurnDSim = 0;
+		public static final double kTurnPSim = 10, kTurnDSim = 0;
 
-		public static final double kDriveKs = 0.03457, kDriveKv = 2.55804;
+		public static final double kDriveKs = 0.02, kDriveKv = 1.220472;
 		public static final double kDriveKsSim = 0.03457, kDriveKvSim = 2.55804;
 
-		public static final boolean kInvertDriveMotor = false;
-		public static final boolean kInvertTurnMotor = true;
+		public static final boolean kInvertRightDriveMotor = true;
+		public static final boolean kInvertLeftDriveMotor = false;
+
+		public static final boolean kInvertTurnMotor = false;
 
 		public static final double kDriveCurrentLimitAmps = 70;
 		public static final double kTurnCurrentLimitAmps = 50;
@@ -230,12 +239,13 @@ public final class SwerveConstants {
 		// "It’s extremely important for the modules to be aligned such that the bevel
 		// gear faces the vertical center of the robot. Failure to perform this step may
 		// lead the drive verification tests to fail."
-		public static final double kFrontLeftEncoderOffset = 0, kFrontRightEncoderOffset = 0,
-				kRearLeftEncoderOffset = 0, kRearRightEncoderOffset = 0;
+		public static final double kFrontLeftEncoderOffset = -0.33935546875, kFrontRightEncoderOffset = -0.4892578125,
+				kRearLeftEncoderOffset = 0.142333984375, kRearRightEncoderOffset = -0.03515625;
 		public static final boolean kInvertEncoders = false;
 
+		// TODO Change after Phoenix pro
 		// CANCoder source for the turning motor
-		public static final FeedbackSensorSourceValue kTurnFeedbackSource = FeedbackSensorSourceValue.FusedCANcoder;
+		public static final FeedbackSensorSourceValue kTurnFeedbackSource = FeedbackSensorSourceValue.RemoteCANcoder; // .FusedCANcoder;
 
 		static {
 			// Drive Config
@@ -244,8 +254,8 @@ public final class SwerveConstants {
 
 			kDrivingConfig.MotorOutput.NeutralMode = NeutralModeValue.Brake;
 			kDrivingConfig.MotorOutput.DutyCycleNeutralDeadband = 0.03;
-			kDrivingConfig.MotorOutput.Inverted = kInvertDriveMotor ? InvertedValue.Clockwise_Positive
-					: InvertedValue.CounterClockwise_Positive;
+			// kDrivingConfig.MotorOutput.Inverted = kInvertDriveMotor ? InvertedValue.Clockwise_Positive
+			// : InvertedValue.CounterClockwise_Positive;
 
 			kDrivingConfig.Slot0 = new Slot0Configs().withKP(kDriveP * kWheelCircumferenceMeters)
 					.withKD(kDriveD * kWheelCircumferenceMeters)
@@ -326,6 +336,39 @@ public final class SwerveConstants {
 		newConfig.Feedback.FeedbackRemoteSensorID = sensorId;
 		newConfig.Feedback.FeedbackSensorSource = base.Feedback.FeedbackSensorSource;
 		newConfig.Feedback.RotorToSensorRatio = base.Feedback.RotorToSensorRatio;
+
+		return newConfig;
+	}
+
+	/**
+	 * Adapts the given steer TalonFXConfiguration to use the given drive inversion.
+	 *
+	 * @param base        The base TalonFXConfiguration to clone.
+	 * @param invertDrive The sensor ID to set in the new configuration.
+	 * @return A new steer TalonFXConfiguration with the specified sensor ID.
+	 */
+	public static TalonFXConfiguration cloneDriveConfig(TalonFXConfiguration base, boolean invertDrive) {
+		TalonFXConfiguration newConfig = new TalonFXConfiguration();
+
+		newConfig.CurrentLimits.SupplyCurrentLimitEnable = base.CurrentLimits.SupplyCurrentLimitEnable;
+		newConfig.CurrentLimits.SupplyCurrentLimit = base.CurrentLimits.SupplyCurrentLimit;
+		newConfig.CurrentLimits.StatorCurrentLimitEnable = base.CurrentLimits.StatorCurrentLimitEnable;
+		newConfig.CurrentLimits.StatorCurrentLimit = base.CurrentLimits.StatorCurrentLimit;
+
+		newConfig.MotorOutput.NeutralMode = base.MotorOutput.NeutralMode;
+		newConfig.MotorOutput.DutyCycleNeutralDeadband = base.MotorOutput.DutyCycleNeutralDeadband;
+		newConfig.MotorOutput.Inverted = invertDrive ? InvertedValue.Clockwise_Positive
+				: InvertedValue.CounterClockwise_Positive;
+		newConfig.MotorOutput.PeakForwardDutyCycle = base.MotorOutput.PeakForwardDutyCycle;
+		newConfig.MotorOutput.PeakReverseDutyCycle = base.MotorOutput.PeakReverseDutyCycle;
+
+		newConfig.Slot0 = new Slot0Configs().withKP(base.Slot0.kP)
+				.withKD(base.Slot0.kD)
+				.withKS(base.Slot0.kS)
+				.withKV(base.Slot0.kV);
+		newConfig.ClosedLoopGeneral.ContinuousWrap = base.ClosedLoopGeneral.ContinuousWrap;
+
+		newConfig.Feedback.SensorToMechanismRatio = base.Feedback.SensorToMechanismRatio;
 
 		return newConfig;
 	}

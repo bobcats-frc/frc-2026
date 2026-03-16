@@ -22,12 +22,12 @@ import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine.Direction;
+import frc.robot.RobotContainer;
 import frc.robot.constants.OIConstants;
+import frc.robot.subsystems.superstructure.Superstructure.ActionState;
 import frc.robot.subsystems.swerve.SwerveConstants.DriveConstants;
 import frc.robot.subsystems.swerve.SwerveConstants.ModuleConstants;
 import frc.robot.subsystems.swerve.SwerveSubsystem;
-import frc.robot.util.GlobalStorage.KeyCategory;
-import frc.robot.util.GlobalStorage.RobotKey;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.util.ArrayList;
@@ -65,6 +65,8 @@ public class DriveCommands {
 	private static final int kWheelCOFBacktrackSamples = 50 / 4; // About 0.25 seconds, ~12 samples.
 	private static final double kWheelCOFStartDelay = 5; // in seconds
 	private static final int kWheelCOFMaxPitchBufferSize = 100; // About 2 seconds
+
+	public static double LatestShootingAngularVelocity = 0;
 
 	/** No constructor for static utilities. */
 	private DriveCommands() {}
@@ -123,21 +125,21 @@ public class DriveCommands {
 			// Square rotation value for more precise control
 			omega = Math.copySign(omega * omega, omega);
 
+			// Aim towards the shot target
+			var superstructure = RobotContainer.getInstance().superstructure;
+			boolean isObjective = superstructure.getActionState() != ActionState.kActionIdle
+					&& superstructure.isLatestShooterParamsRecent();
+			double omegaOut = isObjective ? LatestShootingAngularVelocity : omega * DriveConstants.kMaxAngularSpeed;
+
 			// Convert to field relative speeds & send command
 			ChassisSpeeds speeds = new ChassisSpeeds(linearVelocity.getX() * DriveConstants.kMaxSpeedMetersPerSecond,
-					linearVelocity.getY() * DriveConstants.kMaxSpeedMetersPerSecond,
-					omega * DriveConstants.kMaxAngularSpeed);
+					linearVelocity.getY() * DriveConstants.kMaxSpeedMetersPerSecond, omegaOut);
 			boolean isFlipped = DriverStation.getAlliance().isPresent()
 					&& DriverStation.getAlliance().get() == Alliance.Blue;
 
 			speeds = ChassisSpeeds.fromFieldRelativeSpeeds(speeds,
 					isFlipped ? drive.getRobotRotation().plus(new Rotation2d(Math.PI)) : drive.getRobotRotation());
 
-			// Add the additional velocities and filter nulls
-			Container<ChassisSpeeds> additional = new Container<>(new ChassisSpeeds());
-			RobotKey.<ChassisSpeeds>getValuesFromCategory(KeyCategory.kAdditionalChassisSpeeds)
-					.forEach(s -> additional.val = additional.val.plus(s == null ? new ChassisSpeeds() : s));
-			speeds = speeds.plus(ChassisSpeeds.fromFieldRelativeSpeeds(additional.val, drive.getRobotRotation()));
 			drive.runSpeeds(speeds, false);
 		}, drive);
 	}

@@ -2,20 +2,15 @@ package frc.robot.subsystems.superstructure;
 
 import static edu.wpi.first.units.Units.Meters;
 import static frc.robot.constants.FieldConstants.path;
-import static frc.robot.subsystems.climb.ClimbConstants.kAutonClimbSequenceRetractIntermission;
-import static frc.robot.subsystems.climb.ClimbConstants.kHasClimb;
+import static frc.robot.subsystems.intake.IntakeConstants.kArmClosedAngle;
+import static frc.robot.subsystems.intake.IntakeConstants.kArmOpenedAngle;
+import static frc.robot.subsystems.intake.IntakeConstants.kArmPushFuelAngle;
 import static frc.robot.subsystems.shooter.hood.HoodConstants.kExitAngleOffset;
 import static frc.robot.subsystems.shooter.hood.HoodConstants.kHoodCalibrationAngle;
-import static frc.robot.subsystems.shooter.turret.TurretConstants.kTurretPivotPointCenter;
+import static frc.robot.subsystems.shooter.hood.HoodConstants.kHoodCalibrationYaw;
+import static frc.robot.subsystems.shooter.hood.HoodConstants.kHoodCentralPivotRobotRelative;
 import static frc.robot.subsystems.superstructure.SuperstructureConstants.kAverageShotTime;
 import static frc.robot.subsystems.superstructure.SuperstructureConstants.kChassisStateSwitchDebounce;
-import static frc.robot.subsystems.superstructure.SuperstructureConstants.kClimbPitchAngleDiffThreshold;
-import static frc.robot.subsystems.superstructure.SuperstructureConstants.kClimbedShootingParametersLeftBlue;
-import static frc.robot.subsystems.superstructure.SuperstructureConstants.kClimbedShootingParametersRightBlue;
-import static frc.robot.subsystems.superstructure.SuperstructureConstants.kClimberPostAlignPathLeft;
-import static frc.robot.subsystems.superstructure.SuperstructureConstants.kClimberPostAlignPathRight;
-import static frc.robot.subsystems.superstructure.SuperstructureConstants.kClimberPreAlignPathLeft;
-import static frc.robot.subsystems.superstructure.SuperstructureConstants.kClimberPreAlignPathRight;
 import static frc.robot.subsystems.superstructure.SuperstructureConstants.kCorralAlignPath;
 import static frc.robot.subsystems.superstructure.SuperstructureConstants.kCorralOuttakeTimerLimit;
 import static frc.robot.subsystems.superstructure.SuperstructureConstants.kFlashPeriod;
@@ -53,7 +48,6 @@ import com.bobcats.lib.container.Vector3;
 import com.bobcats.lib.control.shooter.ShooterCalculator;
 import com.bobcats.lib.control.shooter.ShooterCalculator.ShooterParameters;
 import com.bobcats.lib.control.shooter.data.ShooterProjectile;
-import com.bobcats.lib.subsystem.bangbangElevator.BangBangElevator.BangBangElevatorState;
 import com.bobcats.lib.utils.AllianceUtil;
 import com.bobcats.lib.utils.Tracer;
 import com.pathplanner.lib.auto.AutoBuilder;
@@ -79,16 +73,15 @@ import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import edu.wpi.first.wpilibj2.command.button.RobotModeTriggers;
 import frc.robot.Robot;
 import frc.robot.RobotContainer;
+import frc.robot.commands.drive.DriveCommands;
 import frc.robot.constants.Constants;
 import frc.robot.constants.Constants.PhysicalParameters;
 import frc.robot.constants.Constants.RobotMode;
 import frc.robot.constants.FieldConstants;
-import frc.robot.subsystems.climb.Climb;
 import frc.robot.subsystems.intake.Intake;
 import frc.robot.subsystems.shooter.feeder.Feeder;
 import frc.robot.subsystems.shooter.hood.Hood;
 import frc.robot.subsystems.shooter.rollers.Rollers;
-import frc.robot.subsystems.shooter.turret.Turret;
 import frc.robot.subsystems.swerve.SwerveConstants.AutoConstants;
 import frc.robot.subsystems.swerve.SwerveConstants.DriveConstants;
 import frc.robot.subsystems.swerve.SwerveSubsystem;
@@ -110,7 +103,7 @@ import org.littletonrobotics.junction.networktables.LoggedDashboardChooser;
 
 // State Notes:
 // Robot is assumed to have 3 state categories:
-// 1. -> Primary: Primary robot actions: CLIMB, INTAKE, OUTTAKE.
+// 1. -> Primary: Primary robot actions: INTAKE, OUTTAKE.
 // 2. -> Action: Mostly scoring related. E.g. SHOOT_HUB, PASS_ALLIANCE, etc.
 // 3. -> Chassis: Whether the robot is above a certain linear (not angular) velocity threshold
 // The state diagram can be found in the project's root directory.
@@ -127,7 +120,7 @@ public class Superstructure extends SubsystemBase {
 	/** An enum representing the primary states of the robot. */
 	@AllArgsConstructor
 	public enum PrimaryState {
-		kPrimaryIdle("Idle Primary"), kIntaking("Intaking"), kOuttaking("Outtaking"), kClimbing("Climbing");
+		kPrimaryIdle("Idle Primary"), kIntaking("Intaking"), kOuttaking("Outtaking");
 
 		public final String display;
 	}
@@ -154,20 +147,14 @@ public class Superstructure extends SubsystemBase {
 	private ChassisState m_chassisState = ChassisState.kChassisIdle;
 
 	private boolean m_isObjectiveOriented = false;
-	private boolean m_isClimbPathfinding = false;
 	private LoggedDashboardChooser<Boolean> m_isFallbackScoring;
 
 	// For testing and calib purposes, overriding setpoints
 	public boolean setpointOverride = false;
 	public LoggedDashboardChooser<Boolean> overrideRollerSetpointChooser, overrideHoodSetpointChooser;
 
-	private boolean m_hasClimbed = false;
-	private boolean m_isClimbRight = true;
-
 	private Debouncer m_chassisStateDebouncer = new Debouncer(kChassisStateSwitchDebounce, DebounceType.kBoth);
 
-	private PathPlannerPath m_climberAlignPathRightPre, m_climberAlignPathLeftPre;
-	private PathPlannerPath m_climberAlignPathRightPost, m_climberAlignPathLeftPost;
 	private PathPlannerPath m_corralAlignPath;
 	private Alert m_alignPathMissingAlert = new Alert("Unable to obtain an alignment path, please reboot!",
 			AlertType.kError);
@@ -194,14 +181,15 @@ public class Superstructure extends SubsystemBase {
 	private boolean m_isDashboardIntakeStateFlashOn = false;
 	private int m_intakeFlashCycle;
 
+	private Timer m_intakeOscillationTimer = new Timer();
+	private static final double kMaxOscillationTime = 3.0;
+
 	private OptimizedLine m_latestPassLineOpt;
 
 	// Subsystems
 	private final Feeder m_feeder;
 	private final Hood m_hood;
 	private final Rollers m_rollers;
-	private final Turret m_turret;
-	private final Climb m_climb;
 	private final Intake m_intake;
 	private final SwerveSubsystem m_swerve;
 
@@ -211,24 +199,19 @@ public class Superstructure extends SubsystemBase {
 	 * @param feeder  The feeder subsystem.
 	 * @param hood    The hood subsytem.
 	 * @param rollers The roller subsytem.
-	 * @param turret  The turret subsystem.
-	 * @param climb   The climb subsytem.
 	 * @param intake  The intake subsystem.
 	 * @param swerve  The swerve subsystem.
 	 */
 	@SuppressWarnings("resource")
-	public Superstructure(Feeder feeder, Hood hood, Rollers rollers, Turret turret, Climb climb, Intake intake,
-			SwerveSubsystem swerve) {
+	public Superstructure(Feeder feeder, Hood hood, Rollers rollers, Intake intake, SwerveSubsystem swerve) {
 		m_feeder = feeder;
 		m_hood = hood;
 		m_rollers = rollers;
-		m_turret = turret;
-		m_climb = climb;
 		m_intake = intake;
 		m_swerve = swerve;
 
 		m_shooterCalculator = new ShooterCalculator(kShooterDescriptor);
-		superstructureVisualizer = new SuperstructureVisualizer(m_turret, m_hood, m_intake, m_climb);
+		superstructureVisualizer = new SuperstructureVisualizer(m_hood, m_intake);
 
 		m_isFallbackScoring = new LoggedDashboardChooser<>("Fallback Scoring Mode");
 		m_isFallbackScoring.addDefaultOption("Disabled", false);
@@ -243,14 +226,10 @@ public class Superstructure extends SubsystemBase {
 		overrideRollerSetpointChooser.addOption("Enabled", true);
 
 		try {
-			m_climberAlignPathRightPre = PathPlannerPath.fromPathFile(path(kClimberPreAlignPathRight));
-			m_climberAlignPathLeftPre = PathPlannerPath.fromPathFile(path(kClimberPreAlignPathLeft));
-			m_climberAlignPathRightPost = PathPlannerPath.fromPathFile(path(kClimberPostAlignPathRight));
-			m_climberAlignPathLeftPost = PathPlannerPath.fromPathFile(path(kClimberPostAlignPathLeft));
 			m_corralAlignPath = PathPlannerPath.fromPathFile(path(kCorralAlignPath));
 		} catch (FileVersionException | IOException | ParseException e) {
 			m_alignPathMissingAlert.set(true);
-			DriverStation.reportWarning("WARNING: Superstructure::new, unable to obtain an alignment path", false);
+			DriverStation.reportWarning("WARNING: Superstructure::new, unable to obtain corral alignment path", false);
 			e.printStackTrace();
 		}
 
@@ -282,8 +261,6 @@ public class Superstructure extends SubsystemBase {
 			trajectoryThread.startPeriodic(1.0 / 1000.0);
 		}
 
-		RobotModeTriggers.disabled().onTrue(Commands.runOnce(() -> m_isClimbPathfinding = false).ignoringDisable(true));
-
 		setName("Superstructure");
 	}
 
@@ -300,28 +277,16 @@ public class Superstructure extends SubsystemBase {
 			if (m_primaryState == PrimaryState.kIntaking) m_intakeSim.startIntake();
 			else m_intakeSim.stopIntake();
 
-			Pose3d pose = superstructureVisualizer
-					.getRobotPoseWithHeight(RobotContainer.getInstance().swerveSim.getSimulatedDriveTrainPose());
-			m_hasClimbed = Math.abs(Math.toDegrees(pose.getRotation().getY())) >= kClimbPitchAngleDiffThreshold;
 			Logger.recordOutput("Superstructure/SimHopperFuelCount", m_intakeSim.getGamePiecesAmount());
-		} else {
-			m_hasClimbed = Math.abs(m_swerve.getGyro().getInputs().pitchDegrees) >= kClimbPitchAngleDiffThreshold
-					&& kHasClimb;
-		}
-
-		if (m_hasClimbed && m_primaryState != PrimaryState.kIntaking && m_primaryState != PrimaryState.kOuttaking) {
-			m_primaryState = PrimaryState.kClimbing;
-		} else if (!m_hasClimbed && m_primaryState == PrimaryState.kClimbing) {
-			m_primaryState = PrimaryState.kPrimaryIdle;
 		}
 
 		// Flash dashboard for certain states
 		Color shooterFlashColor = kShooterFlashOffColor;
 		if (m_isDashboardShotStateFlashOn && m_rollers.isNearSetpoint() && m_hood.isNearSetpoint()
-				&& m_turret.isNearSetpoint())
+				&& m_swerve.ArbitraryPIDAngular.atSetpoint())
 			shooterFlashColor = kShooterReadyFlashColor;
-		else if (m_isDashboardShotStateFlashOn
-				&& !(m_rollers.isNearSetpoint() && m_hood.isNearSetpoint() && m_turret.isNearSetpoint()))
+		else if (m_isDashboardShotStateFlashOn && !(m_rollers.isNearSetpoint() && m_hood.isNearSetpoint()
+				&& m_swerve.ArbitraryPIDAngular.atSetpoint()))
 			shooterFlashColor = kShooterNotReadyFlashColor;
 		m_shotFlashCycle++;
 		if (m_shotFlashCycle >= (int) (kFlashPeriod / Constants.kLoopPeriodSeconds)) {
@@ -335,9 +300,7 @@ public class Superstructure extends SubsystemBase {
 		boolean canPrefire = SeasonUtils.getTimeUntilHubShift() <= m_latestParameters.timeOfFlight()
 				+ kShootingFlightTimeFudgeFactors.get(getAllianceHubLocation()
 						.getDistance(new Translation3d(m_swerve.getFilteredPose().getTranslation())))
-				+ kPrefireFlashTimeBuffer
-				&& Timer.getFPGATimestamp() - m_lastShooterUpdate <= kShooterStateStaleTimeThreshold
-				&& !SeasonUtils.isAllianceHubActive();
+				+ kPrefireFlashTimeBuffer && isLatestShooterParamsRecent() && !SeasonUtils.isAllianceHubActive();
 		// Flash dashboard if shooter is ready
 		Color prefireFlashColor = kPrefireFlashOffColor;
 		if (m_isPrefireStateFlashOn && canPrefire) prefireFlashColor = kPrefireFlashColor;
@@ -367,16 +330,15 @@ public class Superstructure extends SubsystemBase {
 		Logger.recordOutput("Superstructure/RobotState",
 				m_primaryState.display + " / " + m_actionState.display + " / " + m_chassisState.display);
 		Logger.recordOutput("Superstructure/IsObjectiveOriented", m_isObjectiveOriented);
-		Logger.recordOutput("Superstructure/IsAutoClimb", m_isClimbPathfinding);
 		Logger.recordOutput("Superstructure/LatestShooterState", m_latestParameters.toString());
 		Logger.recordOutput("Superstructure/LastShooterStateUpdate", m_lastShooterUpdate);
-		Logger.recordOutput("Superstructure/HasClimbed", m_hasClimbed);
-		Logger.recordOutput("Superstructure/IsRightAlignClimb", m_isClimbRight);
+		;
 		Logger.recordOutput("Superstructure/IsFeeding", m_isFeeding);
 		Logger.recordOutput("Superstructure/ShooterReadyColor", shooterFlashColor);
 		Logger.recordOutput("Superstructure/IntakeRollerStatus", intakeFlashColor);
 		Logger.recordOutput("Superstructure/PrefireColor", prefireFlashColor);
-		Logger.recordOutput("Superstructure/ClimberState", m_climb.getState());
+		Logger.recordOutput("CShooterControl/LatestShootingAngVel", DriveCommands.LatestShootingAngularVelocity);
+		Logger.recordOutput("CShooterControl/NearSetpoint", m_swerve.ArbitraryPIDAngular.atSetpoint());
 
 		Tracer.finish("SuperstructurePeriodic");
 	}
@@ -411,18 +373,10 @@ public class Superstructure extends SubsystemBase {
 	 */
 	public boolean areRumbleMechanismsAtSetpoints() {
 		return m_intake.isArmNearSetpoint() && m_hood.isNearSetpoint() && m_rollers.isNearSetpoint()
-				&& m_turret.isNearSetpoint();
+				&& m_swerve.ArbitraryPIDAngular.atSetpoint();
 	}
 
 	// Primary State Commands //
-
-	/**
-	 * Sets whether the robot's automatic climb sequence should focus on the right or left endpoint
-	 * of the rung.
-	 *
-	 * @param isRight Whether to align to the right side.
-	 */
-	public void setIsClimbRightSide(boolean isRight) { m_isClimbRight = isRight; }
 
 	/**
 	 * Returns the command to start intaking fuel.
@@ -435,9 +389,7 @@ public class Superstructure extends SubsystemBase {
 				// .andThen(Commands.waitUntil(m_backpack::isNearSetpoint))
 				.andThen(Commands.parallel(Commands.runOnce(m_intake::openIntake),
 						Commands.runOnce(m_intake::runIntakeRollers)))
-				.onlyIf(() -> (m_primaryState == PrimaryState.kPrimaryIdle || m_primaryState == PrimaryState.kIntaking)
-						&& !m_isClimbPathfinding)
-				.onlyWhile(() -> !m_isClimbPathfinding)
+				.onlyIf(() -> m_primaryState == PrimaryState.kPrimaryIdle || m_primaryState == PrimaryState.kIntaking)
 				.withName("Intake.Run");
 	}
 
@@ -452,9 +404,7 @@ public class Superstructure extends SubsystemBase {
 				// .andThen(Commands.waitUntil(m_backpack::isNearSetpoint))
 				.andThen(Commands.parallel(Commands.runOnce(m_intake::openIntake),
 						Commands.runOnce(m_intake::runOuttakeRollers)))
-				.onlyIf(() -> (m_primaryState == PrimaryState.kPrimaryIdle || m_primaryState == PrimaryState.kOuttaking)
-						&& !m_isClimbPathfinding)
-				.onlyWhile(() -> !m_isClimbPathfinding)
+				.onlyIf(() -> m_primaryState == PrimaryState.kPrimaryIdle || m_primaryState == PrimaryState.kOuttaking)
 				.withName("Intake.RunReverse");
 	}
 
@@ -471,54 +421,6 @@ public class Superstructure extends SubsystemBase {
 				.andThen(Commands.runOnce(() -> m_primaryState = PrimaryState.kPrimaryIdle))
 				.onlyIf(() -> m_primaryState == PrimaryState.kIntaking || m_primaryState == PrimaryState.kOuttaking)
 				.withName("Intake.Stop");
-	}
-
-	/**
-	 * Returns the command to extend the climber arm.
-	 *
-	 * @return The command to extend the climber arm.
-	 */
-	public Command climbExtend() {
-		if (!kHasClimb) return Commands.print("Attempted to climb without a climber?");
-		return // Commands
-				// .runOnce(() -> m_primaryState = m_hasClimbed ? PrimaryState.kClimbing :
-				// PrimaryState.kPrimaryIdle)
-		Commands.runOnce(m_climb::extendArm)
-				// .andThen(Commands.runOnce(
-				// () -> m_primaryState = m_hasClimbed ? PrimaryState.kClimbing :
-				// PrimaryState.kPrimaryIdle))
-				.onlyIf(() -> m_primaryState != PrimaryState.kIntaking && m_primaryState != PrimaryState.kOuttaking
-				/* && m_actionState == ActionState.kActionIdle */)
-				.withName("Climb.Extend");
-	}
-
-	/**
-	 * Returns the command to forcefully extend the climber arm, regardless of state.
-	 *
-	 * @return The command to forcefully extend the climber arm, regardless of state.
-	 */
-	public Command climbForceExtend() {
-		if (!kHasClimb) return Commands.print("Attempted to force-extend climb without a climber?");
-		return Commands.runOnce(m_climb::extendArm).withName("Climb.ForceExtend");
-	}
-
-	/**
-	 * Returns the command to retract the climber arm.
-	 *
-	 * @return The command to retract the climber arm.
-	 */
-	public Command climbRetract() {
-		if (!kHasClimb) return Commands.print("Attempted to retract climb without a climber?");
-		return // Commands
-				// .runOnce(() -> m_primaryState = m_hasClimbed ? PrimaryState.kClimbing :
-				// PrimaryState.kPrimaryIdle)
-		Commands.runOnce(m_climb::retractArm)
-				// .andThen(Commands.runOnce(
-				// () -> m_primaryState = m_hasClimbed ? PrimaryState.kClimbing :
-				// PrimaryState.kPrimaryIdle))
-				// .onlyIf(() -> m_primaryState != PrimaryState.kIntaking && m_primaryState !=
-				// PrimaryState.kOuttaking)
-				.withName("Climb.Retract");
 	}
 
 	// Action State Commands //
@@ -561,15 +463,11 @@ public class Superstructure extends SubsystemBase {
 								() -> (SeasonUtils.getTimeUntilHubShift() <= m_latestParameters.timeOfFlight()
 										+ kShootingFlightTimeFudgeFactors.get(getAllianceHubLocation().getDistance(
 												new Translation3d(m_swerve.getFilteredPose().getTranslation())))
-										&& Timer.getFPGATimestamp()
-												- m_lastShooterUpdate <= kShooterStateStaleTimeThreshold) ? true
-														: SeasonUtils.isAllianceHubActive()),
-						Set.of(m_turret, m_rollers, m_hood, m_feeder)))
-				.onlyWhile(() -> m_isObjectiveOriented /* && m_primaryState != PrimaryState.kClimbing */
-						&& m_actionState == ActionState.kScoreFuelHub /* ActionState.kActionIdle */
-				/* && !m_isClimbPathfinding */)
-				.onlyIf(() -> m_isObjectiveOriented /* && m_primaryState != PrimaryState.kClimbing */
-						&& m_actionState == ActionState.kActionIdle && m_primaryState != PrimaryState.kOuttaking)
+										&& isLatestShooterParamsRecent()) ? true : SeasonUtils.isAllianceHubActive()),
+						Set.of(m_rollers, m_hood, m_feeder)))
+				.onlyWhile(() -> m_isObjectiveOriented && m_actionState == ActionState.kScoreFuelHub)
+				.onlyIf(() -> m_isObjectiveOriented && m_actionState == ActionState.kActionIdle
+						&& m_primaryState != PrimaryState.kOuttaking)
 				.withName("Shooter.ScoreFuel");
 	}
 
@@ -583,12 +481,9 @@ public class Superstructure extends SubsystemBase {
 				.andThen(new DeferredCommand(
 						() -> shooterCommand(this::getBestAllianceFuelPassLocation,
 								() -> !isFallbackScoring() && m_latestPassLineOpt.success()),
-						Set.of(m_turret, m_rollers, m_hood, m_feeder)))
-				.onlyWhile(() -> m_isObjectiveOriented /* && m_primaryState != PrimaryState.kClimbing */
-						&& m_actionState == ActionState.kPassFuelAlliance /* ActionState.kActionIdle */
-						&& !m_isClimbPathfinding)
-				.onlyIf(() -> m_isObjectiveOriented /* && m_primaryState != PrimaryState.kClimbing */
-						&& m_actionState != ActionState.kPassFuelAlliance && !m_isClimbPathfinding
+						Set.of(m_rollers, m_hood, m_feeder)))
+				.onlyWhile(() -> m_isObjectiveOriented && m_actionState == ActionState.kPassFuelAlliance)
+				.onlyIf(() -> m_isObjectiveOriented && m_actionState != ActionState.kPassFuelAlliance
 						&& m_primaryState != PrimaryState.kOuttaking)
 				.withName("Shooter.PassFuel");
 	}
@@ -600,50 +495,15 @@ public class Superstructure extends SubsystemBase {
 	 */
 	public Command stopShooter() {
 		return Commands.runOnce(() -> {
+			DriveCommands.LatestShootingAngularVelocity = 0;
 			m_rollers.stop();
 			m_hood.stop();
-			m_turret.stop();
 			stopFeeding();
 			m_actionState = ActionState.kActionIdle;
 		}).withName("Shooter.Stop");
 	}
 
 	// Miscellaneous Commands //
-
-	/**
-	 * Returns a command that pathfinds to the climb point, and autonomously climbs.
-	 *
-	 * @return A command that pathfinds to the climb point, and autonomously climbs.
-	 */
-	public Command alignClimberAndClimbCommand() {
-		if (!kHasClimb) return Commands.print("Attempted to align-and-climb without a climber?");
-		Command cmd = Commands.runOnce(() -> m_isClimbPathfinding = true)
-				.andThen(Commands.parallel(stopIntake(), climbExtend()))
-				.andThen(new DeferredCommand(() -> AutoBuilder.pathfindThenFollowPath(getClimberAlignPathPre(),
-						AutoConstants.kPathConstraints), Set.of(m_swerve)))
-				.andThen(Commands.waitUntil(() -> m_climb.getState() == BangBangElevatorState.kExtended))
-				.andThen(new DeferredCommand(() -> AutoBuilder.pathfindThenFollowPath(getClimberAlignPathPost(),
-						AutoConstants.kPathConstraints), Set.of(m_swerve)))
-				.andThen(Commands.waitSeconds(kAutonClimbSequenceRetractIntermission))
-				.andThen(climbRetract())
-				.andThen(Commands.waitUntil(() -> m_climb.getState() == BangBangElevatorState.kRetracted))
-				.finallyDo(() -> m_isClimbPathfinding = false)
-				.withName("AlignAndClimb");
-		return cmd;
-	}
-
-	/**
-	 * Returns an automatic climb sequence when the robot is autonomous.
-	 *
-	 * @return An automatic climb sequence when the robot is autonomous.
-	 */
-	public Command climbSequenceAuton() {
-		if (!kHasClimb) return Commands.print("Attempted climb sequence without a climber?");
-		return climbExtend().andThen(Commands.waitUntil(() -> m_climb.getState() == BangBangElevatorState.kExtended))
-				.andThen(Commands.waitSeconds(kAutonClimbSequenceRetractIntermission))
-				.andThen(climbRetract())
-				.withName("ClimbSequence");
-	}
 
 	/**
 	 * Returns the command to align to the corral and start outtaking fuel.
@@ -656,10 +516,9 @@ public class Superstructure extends SubsystemBase {
 						.andThen(startOuttaking().andThen(Commands.waitSeconds(kCorralOuttakeTimerLimit))
 								.andThen(stopIntake())))
 				.alongWith(Commands.run(() -> setObjectiveOriented(false)))
-				.onlyIf(() -> !m_isClimbPathfinding
-						&& (m_primaryState == PrimaryState.kPrimaryIdle || m_primaryState == PrimaryState.kOuttaking))
-				.onlyWhile(() -> !m_isClimbPathfinding
-						&& (m_primaryState == PrimaryState.kPrimaryIdle || m_primaryState == PrimaryState.kOuttaking));
+				.onlyIf(() -> m_primaryState == PrimaryState.kPrimaryIdle || m_primaryState == PrimaryState.kOuttaking)
+				.onlyWhile(
+						() -> m_primaryState == PrimaryState.kPrimaryIdle || m_primaryState == PrimaryState.kOuttaking);
 	}
 
 	/**
@@ -668,7 +527,7 @@ public class Superstructure extends SubsystemBase {
 	 * @return The chassis speed limit.
 	 */
 	public double getChassisLimitVelocity() {
-		if (!kLimitVelocityWhenShootingTeleop || !(DriverStation.isTeleop() || DriverStation.isTest()))
+		if (!kLimitVelocityWhenShootingTeleop || DriverStation.isAutonomous())
 			return DriveConstants.kMaxSpeedMetersPerSecond;
 		if (m_actionState == ActionState.kScoreFuelHub) {
 			double d = getAllianceHubLocation().toTranslation2d()
@@ -690,6 +549,15 @@ public class Superstructure extends SubsystemBase {
 	 * @return The latest shooter parameters.
 	 */
 	public ShooterParameters getLatestShooterParameters() { return m_latestParameters; }
+
+	/**
+	 * Returns whether the latest shot parameters are stale or not.
+	 *
+	 * @return Whether the latest shot parameters are stale or not.
+	 */
+	public boolean isLatestShooterParamsRecent() {
+		return Timer.getFPGATimestamp() - m_lastShooterUpdate <= kShooterStateStaleTimeThreshold;
+	}
 
 	/**
 	 * Returns the timestamp of the last update to the shooter parameters.
@@ -718,20 +586,22 @@ public class Superstructure extends SubsystemBase {
 
 	/** Runs the shooter to hit the given target. */
 	private Command shooterCommand(Supplier<Translation3d> target, BooleanSupplier firingCondition) {
-		BooleanSupplier canFire = () -> Math
-				.abs(Timer.getFPGATimestamp() - m_lastShooterUpdate) <= kShooterStateStaleTimeThreshold
-				&& m_latestParameters != null && m_latestParameters.isValid() && m_hood.isNearSetpoint()
-				&& m_turret.isNearSetpoint() && m_rollers.isNearSetpoint() && firingCondition.getAsBoolean();
+		BooleanSupplier canFire = () -> isLatestShooterParamsRecent() && m_latestParameters != null
+				&& m_latestParameters.isValid() && m_hood.isNearSetpoint() && m_swerve.ArbitraryPIDAngular.atSetpoint()
+				&& m_rollers.isNearSetpoint() && firingCondition.getAsBoolean();
 
 		if (Robot.kRobotMode == RobotMode.kSim) return Commands.run(() -> {
 			// Continuously update shooter setpoints
 			updateShooterSetpointState(target.get());
 			if (m_latestParameters != null && m_latestParameters.isValid()) {
 				m_rollers.setRollerVelocity(m_latestParameters.rollerSpeedsRPM());
-				m_turret.setTurretAngle(m_latestParameters.turretAngleRobot().getDegrees());
-				m_hood.setHoodAngle(kExitAngleOffset - m_latestParameters
-						.hoodAngleDegs() /* m_latestParameters.hoodAngleDegs() - kExitAngleOffset */);
+				m_hood.setHoodAngle(kExitAngleOffset - m_latestParameters.hoodAngleDegs());
 			}
+
+			// Update commanded shot angular velocity
+			DriveCommands.LatestShootingAngularVelocity = m_swerve.ArbitraryPIDAngular.calculate(
+					m_swerve.getRobotRotation().getRadians(),
+					getLatestShooterParameters().turretAngleField().getRadians() - Math.toRadians(kHoodCalibrationYaw));
 
 			// Feed only if the shot is possible
 			if (canFire.getAsBoolean() && Timer.getFPGATimestamp() - m_lastFuelShotSim >= kAverageShotTime
@@ -746,26 +616,57 @@ public class Superstructure extends SubsystemBase {
 
 				// Make sure to use current state values, and not the ideal values
 				var currState = m_shooterCalculator.computeCurrentExitParameters(m_latestParameters,
-						kExitAngleOffset - m_hood.getAngle()/* m_hood.getAngle() + kExitAngleOffset */,
-						m_turret.getAngle(), m_rollers.getVelocity(),
-						superstructureVisualizer.getRobotPoseWithHeight(
-								RobotContainer.getInstance().swerveSim.getSimulatedDriveTrainPose()),
+						kExitAngleOffset - m_hood.getAngle(), kHoodCalibrationYaw, m_rollers.getVelocity(),
+						new Pose3d(RobotContainer.getInstance().swerveSim.getSimulatedDriveTrainPose()),
 						RobotContainer.getInstance().swerveSim.getDriveTrainSimulatedChassisSpeedsFieldRelative(),
 						kFuelProjectile);
 				m_lastFuelShotSim = Timer.getFPGATimestamp();
-				// m_projectiles
-				// .add(new ShooterProjectile(kFuelProjectile,
-				// m_latestParameters.exitVelocityVec3(),
-				// new Pose3d(m_latestParameters.exitPose(), Rotation3d.kZero)));
 				m_projectiles.add(new ShooterProjectile(kFuelProjectile, currState.exitVelocityVec3(),
 						new Pose3d(currState.exitPose(), Rotation3d.kZero)));
 				m_intakeSim.obtainGamePieceFromIntake();
 			}
 		})
 				// Stop feeder when unable to fire
-				.alongWith(Commands.run(() -> { if (!canFire.getAsBoolean()) stopFeeding(); }))
+				.alongWith(Commands.run(() -> {
+					if (!canFire.getAsBoolean() || m_latestParameters == null || !m_latestParameters.isValid())
+						stopFeeding();
+				}))
+				.alongWith(Commands.run(() -> {
+					// TODO Needs testing
+					// Oscillate intake
+					if (m_primaryState != PrimaryState.kIntaking && m_primaryState != PrimaryState.kOuttaking
+							&& m_latestParameters != null && isLatestShooterParamsRecent()
+							&& m_latestParameters.isValid()) {
+						if (m_intake.getLatestArmSetpoint() == kArmClosedAngle && m_intake.isArmNearSetpoint()) {
+							m_intake.openIntake();
+							return;
+						}
+
+						if (m_intake.getLatestArmSetpoint() == kArmPushFuelAngle && (m_intake.isArmNearSetpoint()
+								|| m_intakeOscillationTimer.hasElapsed(kMaxOscillationTime))) {
+							m_intake.openIntake();
+							m_intakeOscillationTimer.restart();
+						} else if (m_intake.getLatestArmSetpoint() == kArmOpenedAngle && m_intake.isArmNearSetpoint()) {
+							m_intake.intakePushAngle();
+							m_intakeOscillationTimer.restart();
+						}
+					} else if (m_primaryState != PrimaryState.kIntaking && m_primaryState != PrimaryState.kOuttaking
+							&& (m_latestParameters == null || !isLatestShooterParamsRecent()
+									|| !m_latestParameters.isValid())) {
+										m_intake.stopIntakeArm();
+									}
+				}))
+				// .alongWith(Commands.run(() -> { if (!canFire.getAsBoolean()) stopFeeding(); }))
 				.onlyWhile(() -> m_isObjectiveOriented)
-				.finallyDo(this::stopShooter);
+				.finallyDo(() -> {
+					DriveCommands.LatestShootingAngularVelocity = 0;
+					m_rollers.stop();
+					m_hood.stop();
+					stopFeeding();
+					m_actionState = ActionState.kActionIdle;
+					m_intakeOscillationTimer.stop();
+					m_intakeOscillationTimer.reset();
+				});
 
 		// return Commands.parallel(Commands.run(() ->
 		// updateShooterSetpointState(target.get())),
@@ -815,30 +716,56 @@ public class Superstructure extends SubsystemBase {
 			updateShooterSetpointState(target.get());
 			if (m_latestParameters != null && m_latestParameters.isValid()) {
 				m_rollers.setRollerVelocity(m_latestParameters.rollerSpeedsRPM());
-				m_turret.setTurretAngle(m_latestParameters.turretAngleRobot().getDegrees());
+				// m_turret.setTurretAngle(m_latestParameters.turretAngleRobot().getDegrees());
 				m_hood.setHoodAngle(kExitAngleOffset - m_latestParameters.hoodAngleDegs());
 			}
 
+			// Update commanded shot angular velocity
+			DriveCommands.LatestShootingAngularVelocity = m_swerve.ArbitraryPIDAngular.calculate(
+					m_swerve.getRobotRotation().getRadians(),
+					getLatestShooterParameters().turretAngleField().getRadians() - Math.toRadians(kHoodCalibrationYaw));
+
 			// Shoot if possible by enabling the feeder
-			if (canFire.getAsBoolean() && m_latestParameters != null && m_latestParameters.isValid()
-					&& m_intakeSim.getGamePiecesAmount() > 0)
-				startFeeding();
+			if (canFire.getAsBoolean() && m_latestParameters != null && m_latestParameters.isValid()) startFeeding();
 		})
 				// Stop feeder when unable to fire
-				.alongWith(Commands.run(() -> { if (!canFire.getAsBoolean()) stopFeeding(); }))
+				.alongWith(Commands.run(() -> {
+					if (!canFire.getAsBoolean() || m_latestParameters == null || !m_latestParameters.isValid())
+						stopFeeding();
+				}))
+				.alongWith(Commands.run(() -> {
+					// TODO Needs testing
+					// Oscillate intake
+					System.out.println(isLatestShooterParamsRecent());
+					if (m_primaryState != PrimaryState.kIntaking && m_primaryState != PrimaryState.kOuttaking
+							&& m_latestParameters != null && isLatestShooterParamsRecent()
+							&& m_latestParameters.isValid()) {
+						if (m_intake.getLatestArmSetpoint() == kArmPushFuelAngle && m_intake.isArmNearSetpoint()) {
+							m_intake.openIntake();
+						} else if (m_intake.getLatestArmSetpoint() == kArmOpenedAngle && m_intake.isArmNearSetpoint()) {
+							m_intake.intakePushAngle();
+						}
+					} else if (m_primaryState != PrimaryState.kIntaking && m_primaryState != PrimaryState.kOuttaking
+							&& (m_latestParameters == null || !isLatestShooterParamsRecent()
+									|| !m_latestParameters.isValid())) {
+										m_intake.stopIntakeArm();
+									}
+				}))
 				.onlyWhile(() -> m_isObjectiveOriented)
-				.finallyDo(this::stopShooter);
+				.finallyDo(() -> {
+					DriveCommands.LatestShootingAngularVelocity = 0;
+					m_rollers.stop();
+					m_hood.stop();
+					stopFeeding();
+					m_actionState = ActionState.kActionIdle;
+				});
 	}
 
 	/** Recalculates the shooter parameters. */
 	private void updateShooterSetpointState(Translation3d target) {
 		// Update timer beforehand
 		m_lastShooterUpdate = Timer.getFPGATimestamp();
-		if (m_primaryState == PrimaryState.kClimbing) {
-			// Use specific parameters for shooting while climbed
-			m_latestParameters = flipParametersAlliance(
-					m_isClimbRight ? kClimbedShootingParametersRightBlue : kClimbedShootingParametersLeftBlue);
-		} else if (!isFallbackScoring()) {
+		if (!isFallbackScoring()) {
 			var hubPose = new Pose3d(target, Rotation3d.kZero);
 			m_latestParameters = m_shooterCalculator.updateParameters(hubPose.getTranslation(),
 					new Pose3d(m_swerve.getFilteredPose()), m_swerve.getRobotRotation(),
@@ -869,27 +796,14 @@ public class Superstructure extends SubsystemBase {
 				AllianceUtil.flipWithAlliance(new Translation3d(FieldConstants.kBlueAllianceZoneFuelPassLineLeftPoint))
 						.toTranslation2d());
 		// Performance should be fine? 0.1 - 1ms???
-		OptimizedLine opt = LineTrajectoryUtils
-				.optimizeUntilNoIntersect(
-						m_swerve.getFilteredPose()
-								.transformBy(new Transform2d(kTurretPivotPointCenter.getTranslation().toTranslation2d(),
-										Rotation2d.kZero))
-								.getTranslation(),
-						List.of(netLine), passLine, kPassTrajOptSteps, kPassFuelAcceptDistance);
+		OptimizedLine opt = LineTrajectoryUtils.optimizeUntilNoIntersect(m_swerve.getFilteredPose()
+				.transformBy(new Transform2d(kHoodCentralPivotRobotRelative.getTranslation().toTranslation2d(),
+						Rotation2d.kZero))
+				.getTranslation(), List.of(netLine), passLine, kPassTrajOptSteps, kPassFuelAcceptDistance);
 		Tracer.finish("OptimizePassTrajectory");
 		m_latestPassLineOpt = opt;
 
 		return new Translation3d(opt.optimizedLine().end());
-	}
-
-	/** Returns the correct path to align for climbing. */
-	private PathPlannerPath getClimberAlignPathPre() {
-		return m_isClimbRight ? m_climberAlignPathRightPre : m_climberAlignPathLeftPre;
-	}
-
-	/** Returns the correct path to align for climbing. */
-	private PathPlannerPath getClimberAlignPathPost() {
-		return m_isClimbRight ? m_climberAlignPathRightPost : m_climberAlignPathLeftPost;
 	}
 
 	/** Flips the shooter parameters based on alliance. */

@@ -1,8 +1,8 @@
 package frc.robot.commands;
 
 import static edu.wpi.first.units.Units.Meters;
+import static frc.robot.constants.FieldConstants.kFieldWith;
 import static frc.robot.constants.FieldConstants.path;
-import static frc.robot.subsystems.climb.ClimbConstants.kHasClimb;
 
 import com.bobcats.lib.auto.CustomRoutineBuilder;
 import com.bobcats.lib.utils.AllianceUtil;
@@ -20,7 +20,10 @@ import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.DeferredCommand;
+import frc.robot.Robot;
 import frc.robot.RobotContainer;
+import frc.robot.commands.drive.DriveCommands;
+import frc.robot.commands.drive.PassBumpCommand;
 import frc.robot.constants.Constants.PhysicalParameters;
 import frc.robot.constants.FieldConstants;
 import frc.robot.subsystems.superstructure.SuperstructureConstants;
@@ -29,8 +32,10 @@ import frc.robot.subsystems.swerve.VisionConstants;
 import frc.robot.util.TrajectoryUtils2026;
 import frc.robot.util.TrajectoryUtils2026.GeneratorParams;
 import java.io.IOException;
+import java.util.List;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
 import org.json.simple.parser.ParseException;
 import org.littletonrobotics.junction.Logger;
 import org.littletonrobotics.junction.networktables.LoggedDashboardChooser;
@@ -58,11 +63,6 @@ public class AutonomousBuilder implements CustomRoutineBuilder {
 		kScoreNeutralAdaptive;
 	}
 
-	/** An enum specifying the autonomous routine climb side. */
-	public enum AutoClimbSide {
-		kNone, kRight, kLeft, kPark;
-	}
-
 	/**
 	 * An enum specifying whether to override the bump crossing side for neutral scoring.
 	 */
@@ -70,9 +70,15 @@ public class AutonomousBuilder implements CustomRoutineBuilder {
 		kNone, kForceRight, kForceLeft;
 	}
 
+	/**
+	 * The scoring mode, i.e. after what objectives to score.
+	 */
+	public enum ScoringMode {
+		kNone, kObjective1, kObjective2, kObjective1And2;
+	}
+
 	// Dashboard choosers
 	private LoggedDashboardChooser<AutoType> m_autoTypeChooser;
-	// NOTE: Only the climb side chooser works with pathplanner routines.
 	private LoggedDashboardChooser<Command> m_ppAutoRoutine;
 
 	private LoggedDashboardChooser<AutoStartingPoint> m_startingPointChooser;
@@ -81,22 +87,23 @@ public class AutonomousBuilder implements CustomRoutineBuilder {
 	private LoggedDashboardChooser<AutoBumpCrossingOverride> m_forceNeutralCrossSideOverride;
 	private LoggedDashboardChooser<Double> m_adaptiveNeutralTimeBudgetChooser;
 	private LoggedDashboardChooser<Double> m_objective1EndCooldown;
-	private LoggedDashboardChooser<AutoClimbSide> m_climbSideChooser;
+	private LoggedDashboardChooser<Boolean> m_parkChooser;
 	private LoggedDashboardChooser<Boolean> m_passThroughTowerObj2;
 	private LoggedDashboardChooser<Boolean> m_passThroughTowerObj1;
-	private LoggedDashboardChooser<Boolean> m_shouldScoreChooser;
+	private LoggedDashboardChooser<ScoringMode> m_scoringModeChooser;
+	private LoggedDashboardChooser<Boolean> m_scoreFirst8;
 
 	// Incompatibility warnings
-	private Alert m_doubleDepotAlert, m_doubleOutpostAlert, m_deadOnTheFieldAlert, m_redundantBumpOverride,
-			m_redundantTowerCrossObj2, m_redundantTowerCrossObj1, m_redundantPathPlannerPath, m_noClimb,
-			m_noPathSelected, m_invalidLeaveObjective, m_unableToObtainPath;
+	private Alert m_doubleDepotAlert, m_doubleOutpostAlert, m_redundantBumpOverride, m_redundantTowerCrossObj2,
+			m_redundantTowerCrossObj1, m_redundantPathPlannerPath, m_noPathSelected, m_invalidLeaveObjective,
+			m_unableToObtainPath, m_objective2before1;
 
-	// TODO Re-measure with real robot
+	// TODO fallback scoring mode????
+
 	// Constants
 	private static final double kDepotIdleCooldown = 0.4;
 	private static final double kOutpostIdleCooldown = 2.5;
 
-	private static final double kPassAllianceBumpTimer = 1.0;
 	private static final double kNeutralIntakeTimer = 1.0;
 	private static final double kLeaveTimer = 0.5;
 
@@ -110,8 +117,16 @@ public class AutonomousBuilder implements CustomRoutineBuilder {
 	private static final ChassisSpeeds kIntakeNeutralSpeedsFwdBlue = new ChassisSpeeds(3.5, 0, 0);
 	private static final ChassisSpeeds kIntakeNeutralSpeedsRevBlue = new ChassisSpeeds(-3.5, 0, 0);
 
-	private static final ChassisSpeeds kPassBumpSpeedsFwdBlue = new ChassisSpeeds(2, 0, 0);
-	private static final ChassisSpeeds kPassBumpSpeedsRevBlue = new ChassisSpeeds(-2.5, 0, 0);
+	private static final double kSimPassBumpTimer = 1.0;
+	private static final double kPassBumpSpeedsFwdBlue = 1.5;
+	private static final double kPassBumpSpeedsRevBlue = -1.5;
+
+	private static final double k8ScoringTimer = 1.5;
+	private static final double k24ScoringTimer = 2.5;
+	private static final double k60ScoringTimer = 4.5;
+
+	private static final Pose2d kScoringPoseRightBlue = new Pose2d(2.5, 2.15, Rotation2d.fromDegrees(-136.7)),
+			kScoringPoseLeftBlue = new Pose2d(2.5, kFieldWith - 2.15, Rotation2d.fromDegrees(136.7));
 
 	// Pre-pathed trajectories
 	private PathPlannerPath m_rightLoopOver, m_leftLoopOver, m_rightSweepOver, m_leftSweepOver, m_towerLR, m_towerRL;
@@ -164,13 +179,9 @@ public class AutonomousBuilder implements CustomRoutineBuilder {
 		m_adaptiveNeutralTimeBudgetChooser.addOption("4 seconds", 4.0);
 		m_adaptiveNeutralTimeBudgetChooser.addOption("3 seconds", 3.0);
 
-		m_climbSideChooser = new LoggedDashboardChooser<>("Autonomous Climb Side");
-		m_climbSideChooser.addDefaultOption("None", AutoClimbSide.kNone);
-		if (kHasClimb) {
-			m_climbSideChooser.addOption("Right", AutoClimbSide.kRight);
-			m_climbSideChooser.addOption("Left", AutoClimbSide.kLeft);
-		}
-		m_climbSideChooser.addOption("Park", AutoClimbSide.kPark);
+		m_parkChooser = new LoggedDashboardChooser<>("Autonomous Parking");
+		m_parkChooser.addDefaultOption("No", false);
+		m_parkChooser.addOption("Yes", true);
 
 		m_passThroughTowerObj1 = new LoggedDashboardChooser<>("Autonomous Pass Through Tower Objective #1");
 		m_passThroughTowerObj1.addDefaultOption("No", false);
@@ -180,9 +191,15 @@ public class AutonomousBuilder implements CustomRoutineBuilder {
 		m_passThroughTowerObj2.addDefaultOption("No", false);
 		m_passThroughTowerObj2.addOption("Yes", true);
 
-		m_shouldScoreChooser = new LoggedDashboardChooser<>("Autonomous Scoring");
-		m_shouldScoreChooser.addDefaultOption("Score", true);
-		m_shouldScoreChooser.addOption("Don't Score", false);
+		m_scoringModeChooser = new LoggedDashboardChooser<>("Autonomous Scoring");
+		m_scoringModeChooser.addDefaultOption("After Objective #1 and #2", ScoringMode.kObjective1And2);
+		m_scoringModeChooser.addOption("After Objective #1", ScoringMode.kObjective1);
+		m_scoringModeChooser.addOption("After Objective #2", ScoringMode.kObjective2);
+		m_scoringModeChooser.addOption("None", ScoringMode.kNone);
+
+		m_scoreFirst8 = new LoggedDashboardChooser<>("Autonomous Score First 8 Fuel");
+		m_scoreFirst8.addDefaultOption("No", false);
+		m_scoreFirst8.addOption("Yes", true);
 
 		// Load individual paths
 		m_unableToObtainPath = new Alert("Unable to obtain an autonomous builder path! Reboot the robot.",
@@ -204,8 +221,6 @@ public class AutonomousBuilder implements CustomRoutineBuilder {
 		// Initialize alerts
 		m_doubleDepotAlert = new Alert("Incompatible autonomous! Primary and secondary objectives both set to depot.",
 				AlertType.kWarning);
-		m_deadOnTheFieldAlert = new Alert("No autonomous selected with custom builder! Robot is dead on the field.",
-				AlertType.kWarning);
 		m_redundantBumpOverride = new Alert("Redundant bump override given, but no neutral scoring objective selected.",
 				AlertType.kWarning);
 		m_redundantTowerCrossObj1 = new Alert("Redundant Objective #1 tower cross given with invalid objectives.",
@@ -215,13 +230,14 @@ public class AutonomousBuilder implements CustomRoutineBuilder {
 		m_redundantPathPlannerPath = new Alert(
 				"Redundant PathPlanner path was selected even though the custom builder is being used.",
 				AlertType.kWarning);
-		m_noClimb = new Alert("No climb was selected, is this intentional?", AlertType.kWarning);
 		m_noPathSelected = new Alert("PathPlanner mode active, but no PathPlanner path selected!", AlertType.kWarning);
 		m_invalidLeaveObjective = new Alert(
 				"Redundant leave objective is set as primary when a secondary or climb objective is present. Set primary to none instead.",
 				AlertType.kWarning);
 		m_doubleOutpostAlert = new Alert(
 				"Incompatible autonomous! Primary and secondary objectives both set to outpost.", AlertType.kWarning);
+		m_objective2before1 = new Alert("Objective #2 set before Objective #1, possible issues during autonomous!",
+				AlertType.kWarning);
 	}
 
 	/**
@@ -231,23 +247,15 @@ public class AutonomousBuilder implements CustomRoutineBuilder {
 		var obj1 = m_objective1Chooser.get();
 		var obj2 = m_objective2Chooser.get();
 		var autoType = m_autoTypeChooser.get();
-		var climbSide = m_climbSideChooser.get();
 
 		// Both objectives set to Depot
 		m_doubleDepotAlert.set(obj1 == AutoObjective.kScoreDepot && obj2 == AutoObjective.kScoreDepot);
 		// Both objectives set to Outpost
 		m_doubleOutpostAlert.set(obj1 == AutoObjective.kScoreOutpost && obj2 == AutoObjective.kScoreOutpost);
-		// No valid auto selected, no autonomous action, all set to none
-		m_deadOnTheFieldAlert.set(autoType == AutoType.kCustom && obj1 == AutoObjective.kNone
-				&& obj2 == AutoObjective.kNone && climbSide == AutoClimbSide.kNone);
-
-		// Whether Objective #1 is a neutral zone objective
-		boolean isPrimaryNeutralObj = obj1 == AutoObjective.kScoreNeutral || obj1 == AutoObjective.kScoreNeutralAdaptive
-				|| obj1 == AutoObjective.kScoreNeutralLoopOver || obj1 == AutoObjective.kScoreNeutralSweepOver;
 
 		// A bump override provided with no neutral objective
-		m_redundantBumpOverride
-				.set(!isPrimaryNeutralObj && m_forceNeutralCrossSideOverride.get() != AutoBumpCrossingOverride.kNone);
+		m_redundantBumpOverride.set(!isPrimaryNeutralObjective()
+				&& m_forceNeutralCrossSideOverride.get() != AutoBumpCrossingOverride.kNone);
 
 		// Cross to go from the depot to the outpost or vice versa
 		boolean objective2CrossBetweenDepotOutpost = (obj1 == AutoObjective.kScoreDepot
@@ -257,13 +265,13 @@ public class AutonomousBuilder implements CustomRoutineBuilder {
 		// used as that comes out of the bump opposite to the bump it started
 		boolean objective2CrossFromRightBumpToDepot = ((isCrossRightObjective1()
 				&& obj1 != AutoObjective.kScoreNeutralSweepOver)
-				|| (!isCrossRightObjective1() && obj1 == AutoObjective.kScoreNeutralSweepOver)) && isPrimaryNeutralObj
-				&& obj2 == AutoObjective.kScoreDepot;
+				|| (!isCrossRightObjective1() && obj1 == AutoObjective.kScoreNeutralSweepOver))
+				&& isPrimaryNeutralObjective() && obj2 == AutoObjective.kScoreDepot;
 		// Same as obove, just inverted logic
 		boolean objective2CrossFromLeftBumpToOutpost = !((isCrossRightObjective1()
 				&& obj1 != AutoObjective.kScoreNeutralSweepOver)
-				|| (!isCrossRightObjective1() && obj1 == AutoObjective.kScoreNeutralSweepOver)) && isPrimaryNeutralObj
-				&& obj2 == AutoObjective.kScoreOutpost;
+				|| (!isCrossRightObjective1() && obj1 == AutoObjective.kScoreNeutralSweepOver))
+				&& isPrimaryNeutralObjective() && obj2 == AutoObjective.kScoreOutpost;
 
 		// Passing through the tower with no real purpose for Objective #2
 		m_redundantTowerCrossObj2.set(m_passThroughTowerObj2.get() && !(objective2CrossBetweenDepotOutpost
@@ -271,11 +279,11 @@ public class AutonomousBuilder implements CustomRoutineBuilder {
 
 		// In the beginning, crossing from the right starting point to the depot (left)
 		boolean objective1CrossRightToLeftValid = m_startingPointChooser.get() == AutoStartingPoint.kRight
-				&& obj1 == AutoObjective.kScoreDepot;
+				&& (obj1 == AutoObjective.kScoreDepot || (isPrimaryNeutralObjective() && !isCrossRightObjective1()));
 		// In the beginning, crossing from the left starting point to the outpost
 		// (right)
 		boolean objective1CrossLeftToRightValid = m_startingPointChooser.get() == AutoStartingPoint.kLeft
-				&& obj1 == AutoObjective.kScoreOutpost;
+				&& (obj1 == AutoObjective.kScoreOutpost || ((isPrimaryNeutralObjective() && isCrossRightObjective1())));
 		// Only allow passing through for opposite side objectives
 		m_redundantTowerCrossObj1.set(
 				m_passThroughTowerObj1.get() && !(objective1CrossRightToLeftValid || objective1CrossLeftToRightValid));
@@ -283,14 +291,16 @@ public class AutonomousBuilder implements CustomRoutineBuilder {
 		// PathPlanner path selected for the custom builder
 		m_redundantPathPlannerPath.set(
 				autoType == AutoType.kCustom && !m_ppAutoRoutine.getSendableChooser().getSelected().equals("None"));
-		// No climb objective given
-		m_noClimb.set(climbSide == AutoClimbSide.kNone);
 		// No path selected for PathPlanner
 		m_noPathSelected.set(
 				autoType == AutoType.kPathPlanner && m_ppAutoRoutine.getSendableChooser().getSelected().equals("None"));
 		// Redundant leave objective, wastes time
 		m_invalidLeaveObjective
-				.set(obj1 == AutoObjective.kLeave && (obj2 != AutoObjective.kNone || climbSide != AutoClimbSide.kNone));
+				.set(obj1 == AutoObjective.kLeave && (obj2 != AutoObjective.kNone || m_scoreFirst8 != null));
+
+		// Objective 2 is set before objective 1 is set
+		m_objective2before1.set(
+				m_objective2Chooser.get() != AutoObjective.kNone && m_objective1Chooser.get() == AutoObjective.kNone);
 	}
 
 	@Override
@@ -304,28 +314,15 @@ public class AutonomousBuilder implements CustomRoutineBuilder {
 		var passTowerObj1 = m_passThroughTowerObj1.get();
 		var passTowerObj2 = m_passThroughTowerObj2.get();
 		var autoType = m_autoTypeChooser.get();
-		var climbSide = m_climbSideChooser.get();
-
-		// Pre-extend arm to save time
-		Command climbInitiate = superstructure.climbForceExtend()
-				.onlyIf(() -> climbSide != AutoClimbSide.kNone && climbSide != AutoClimbSide.kPark && kHasClimb);
 
 		// Return early if using a PP routine
 		if (autoType == AutoType.kPathPlanner)
-			return Commands.runOnce(() -> superstructure.setIsClimbRightSide(climbSide != AutoClimbSide.kLeft))
-					.andThen(climbInitiate)
-					// .andThen(() ->
-					// CommandScheduler.getInstance().schedule(m_ppAutoRoutine.get()))
-					.andThen(m_ppAutoRoutine.get().asProxy())
-					.withName(m_ppAutoRoutine.get().getName());
+			return m_ppAutoRoutine.get().asProxy().withName(m_ppAutoRoutine.get().getName());
 
 		// Resetting the odometry / starting pose
 		Command resetOdomCommand = Commands.runOnce(() -> swerve.resetOdometry(getStartingPoseFlipped()));
 
 		// Setting robot objective state
-		Command scoreCommand = m_shouldScoreChooser.get()
-				? Commands.runOnce(() -> robotContainer.initAutonScoreFuelCommand()) : Commands.none();
-
 		boolean neutralAlignRightObj1 = isCrossRightObjective1();
 
 		var deferredNeutralAdaptive = new DeferredCommand(() -> {
@@ -334,7 +331,7 @@ public class AutonomousBuilder implements CustomRoutineBuilder {
 			if (!path.isPresent()) {
 				DriverStation.reportWarning("WARNING: Adaptive auto has failed, no path generated! Using fallback.",
 						false);
-				Logger.recordOutput("AdaptivaAutoFailedObjects",
+				Logger.recordOutput("AdaptiveAutoFailedObjects",
 						robotContainer.objectDetection.getDetectedInstances().toArray(Pose2d[]::new));
 				// Use fallback path instead
 				return runIntakeSpeeds(true).andThen(() -> swerve.stop())
@@ -364,25 +361,24 @@ public class AutonomousBuilder implements CustomRoutineBuilder {
 			// Cross tower if appropriate && intake from the outpost
 			case kScoreOutpost -> outpostTrajectory(false, m_passThroughTowerObj1::get);
 			// Intake from the neutral zone via a linear horizontal trajectory
-			case kScoreNeutral -> AutoBuilder
-					// Set up to cross the bump
-					.pathfindToPoseFlipped(neutralAlignRightObj1 ? FieldConstants.kRobotPoseRightBlue
-							: FieldConstants.kRobotPoseLeftBlue, AutoConstants.kPathConstraints)
-					.andThen(Commands.runOnce(() -> robotContainer.cancelAutonScoreFuelCommand()))
-					.andThen(passBump(true))
-					// Drive straight then back
-					.andThen(runIntakeSpeeds(true).alongWith(superstructure.startIntaking()))
-					.andThen(() -> swerve.stop())
-					.andThen(runIntakeSpeeds(false))
-					.andThen(() -> swerve.stop())
-					.andThen(Commands.runOnce(() -> superstructure.stopIntake()))
-					.andThen(passBump(false))
-					.andThen(() -> swerve.stop())
-					.andThen(() -> {
-						if (!m_shouldScoreChooser.get()) return;
-						// superstructure.setObjectiveOriented(false);
-						robotContainer.initAutonScoreFuelCommand();
-					});
+			case kScoreNeutral -> crossTower(
+					m_startingPointChooser.get() == AutoStartingPoint.kRight && !isCrossRightObjective1())
+							.onlyIf(m_passThroughTowerObj1::get)
+							// Set up to cross the bump
+							.andThen(
+									AutoBuilder.pathfindToPoseFlipped(
+											neutralAlignRightObj1 ? FieldConstants.kRobotPoseRightBlue
+													: FieldConstants.kRobotPoseLeftBlue,
+											AutoConstants.kPathConstraints))
+							.andThen(passBump(true))
+							// Drive straight then back
+							.andThen(runIntakeSpeeds(true).alongWith(superstructure.startIntaking()))
+							.andThen(() -> swerve.stop())
+							.andThen(runIntakeSpeeds(false))
+							.andThen(() -> swerve.stop())
+							.andThen(Commands.runOnce(() -> superstructure.stopIntake()))
+							.andThen(passBump(false))
+							.andThen(() -> swerve.stop());
 			// Intake from the neutral in a loop shape
 			case kScoreNeutralLoopOver -> neutralTrajectory(neutralAlignRightObj1 ? m_rightLoopOver : m_leftLoopOver,
 					neutralAlignRightObj1);
@@ -395,6 +391,9 @@ public class AutonomousBuilder implements CustomRoutineBuilder {
 				robotContainer.objectDetectionCamRear.setPipeline(VisionConstants.kObjectDetectionPipelineId);
 				robotContainer.objectDetectionCamRear.setEnabled(true);
 			})
+					.andThen(crossTower(
+							m_startingPointChooser.get() == AutoStartingPoint.kRight && !isCrossRightObjective1())
+									.onlyIf(m_passThroughTowerObj1::get))
 					// Set up to pass the bump
 					.andThen(AutoBuilder.pathfindToPoseFlipped(
 							neutralAlignRightObj1
@@ -403,7 +402,6 @@ public class AutonomousBuilder implements CustomRoutineBuilder {
 									: FieldConstants.kRobotPoseLeftBlue.rotateAround(
 											FieldConstants.kRobotPoseLeftBlue.getTranslation(), Rotation2d.kPi),
 							AutoConstants.kPathConstraints))
-					.andThen(Commands.runOnce(() -> robotContainer.cancelAutonScoreFuelCommand()))
 					.andThen(passBump(true).andThen(swerve::stop))
 					// TODO maybe cache the values when non-zero?
 					.andThen(Commands.waitUntil(() -> robotContainer.objectDetection.getDetectedInstances().size() > 0)
@@ -418,13 +416,8 @@ public class AutonomousBuilder implements CustomRoutineBuilder {
 						robotContainer.objectDetectionCamRear.setPipeline(VisionConstants.kLocalizationPipelineId);
 					})))
 					.andThen(() -> swerve.stop())
-					.andThen(() -> {
-						if (!m_shouldScoreChooser.get()) return;
-						superstructure.setObjectiveOriented(false);
-						robotContainer.initAutonScoreFuelCommand();
-					})
 					.finallyDo((interrupt) -> {
-						PPHolonomicDriveController.clearRotationFeedbackOverride();
+						// PPHolonomicDriveController.clearRotationFeedbackOverride();
 						// Switch back to localization for teleop if interrupted
 						if (!interrupt) return;
 						robotContainer.objectDetectionCamRear.setEnabled(false);
@@ -433,10 +426,6 @@ public class AutonomousBuilder implements CustomRoutineBuilder {
 			case kNone -> Commands.none();
 			default -> Commands.none();
 		};
-
-		// Whether the primary objective is a neutral zone objective
-		boolean isPrimaryNeutral = obj1 == AutoObjective.kScoreNeutral || obj1 == AutoObjective.kScoreNeutralAdaptive
-				|| obj1 == AutoObjective.kScoreNeutralLoopOver || obj1 == AutoObjective.kScoreNeutralSweepOver;
 
 		// After going to the neutral zone, would the robot enter through the right
 		// bump?
@@ -448,37 +437,45 @@ public class AutonomousBuilder implements CustomRoutineBuilder {
 			// Cross tower if appropriate && intake from the depot (either coming from the
 			// right bump or outpost)
 			case kScoreDepot -> depotTrajectory(true, () -> passTowerObj2
-					&& (obj1 == AutoObjective.kScoreOutpost || (isRightNeutralReEntry && isPrimaryNeutral)));
+					&& (obj1 == AutoObjective.kScoreOutpost || (isRightNeutralReEntry && isPrimaryNeutralObjective())));
 			// Cross tower if appropriate && intake from the outpost (either coming from the
 			// left bump or depot)
 			case kScoreOutpost -> outpostTrajectory(false, () -> passTowerObj2
-					&& (obj1 == AutoObjective.kScoreDepot || (!isRightNeutralReEntry && isPrimaryNeutral)));
+					&& (obj1 == AutoObjective.kScoreDepot || (!isRightNeutralReEntry && isPrimaryNeutralObjective())));
 			case kNone -> Commands.none();
 			default -> Commands.none();
 		};
 
-		// Align & climb command, choose between climb, park or neither
-		Command climbCommand = Commands.either(
-				Commands.runOnce(() -> { superstructure.setIsClimbRightSide(climbSide != AutoClimbSide.kLeft); })
-						.andThen(Commands.either(superstructure.alignClimberAndClimbCommand(), Commands.none(),
-								() -> climbSide != AutoClimbSide.kNone)),
-				robotContainer.getAutoManager()
-						.getPathfindCommand(path("AutoPark"), AutoConstants.kPathfindSkipTolerance),
-				() -> climbSide != AutoClimbSide.kPark);
+		// Parking command
+		Supplier<Command> parking = () -> robotContainer.getAutoManager()
+				.getPathfindCommand(path("AutoPark"), AutoConstants.kPathfindSkipTolerance)
+				.onlyIf(m_parkChooser::get);
 
 		// Piece together each command
-		return Commands.waitSeconds(kAutoBufferTime)
-				.andThen(resetOdomCommand)
-				.andThen(scoreCommand)
-				.andThen(climbInitiate)
+		return resetOdomCommand.andThen(Commands.waitSeconds(kAutoBufferTime))
+				.andThen(Commands.either(
+						parking.get()
+								.andThen(new DeferredCommand(() -> scoreFuel(99999, getPrescorePose()),
+										Set.of(RobotContainer.getInstance().swerve)).onlyIf(m_scoreFirst8::get)),
+						new DeferredCommand(() -> scoreFuel(k8ScoringTimer, getPrescorePose()),
+								Set.of(RobotContainer.getInstance().swerve)).onlyIf(m_scoreFirst8::get),
+						() -> m_objective1Chooser.get() == AutoObjective.kNone
+								&& m_objective2Chooser.get() == AutoObjective.kNone && m_parkChooser.get()))
 				.andThen(objective1Command)
+				.andThen(scoreAfterObjective(
+						m_objective2Chooser.get() != AutoObjective.kNone ? getObjective1ScoreTime() : 99999, true)
+								.onlyIf(() -> m_objective1Chooser.get() != AutoObjective.kNone))
+				.andThen(Commands.waitSeconds(m_objective1EndCooldown.get()))
 				.andThen(objective2Command)
-				.andThen(climbCommand)
-				.finallyDo(() -> superstructure.setIsClimbRightSide(true))
+				.andThen(parking.get()
+						.onlyIf(() -> (m_objective1Chooser.get() != AutoObjective.kNone
+								|| m_objective2Chooser.get() != AutoObjective.kNone) && m_parkChooser.get()))
+				.andThen(scoreAfterObjective(99999, false)
+						.onlyIf(() -> m_objective2Chooser.get() != AutoObjective.kNone))
 				.withName("Custom Auto Routine (Starting: " + m_startingPointChooser.get() + " / Objective #1: " + obj1
-						+ " / Objective #2: " + obj2 + " / Climb: " + climbSide + " / Score: "
-						+ m_shouldScoreChooser.get() + " / Pass Tower Objective #1: " + passTowerObj1
-						+ " / Pass Tower Objective #2: " + passTowerObj2 + ")");
+						+ " / Objective #2: " + obj2 + " / Score: " + m_scoringModeChooser.get()
+						+ " / Pass Tower Objective #1: " + passTowerObj1 + " / Pass Tower Objective #2: "
+						+ passTowerObj2 + " / Park: " + m_parkChooser.get() + ")");
 	}
 
 	/** Returns the appropriately flipped starting pose. */
@@ -508,10 +505,14 @@ public class AutonomousBuilder implements CustomRoutineBuilder {
 
 	/** Returns the command to pass the bump. */
 	private Command passBump(boolean isToNeutral) {
+		if (!Robot.isSimulation()) return new PassBumpCommand(RobotContainer.getInstance().swerve,
+				isToNeutral ? kPassBumpSpeedsFwdBlue : kPassBumpSpeedsRevBlue);
+
 		return Commands
-				.run(() -> RobotContainer.getInstance().swerve.runSpeeds(isToNeutral
-						? getFlippedSpeeds(kPassBumpSpeedsFwdBlue) : getFlippedSpeeds(kPassBumpSpeedsRevBlue), true))
-				.withTimeout(kPassAllianceBumpTimer);
+				.run(() -> RobotContainer.getInstance().swerve
+						.runSpeeds(isToNeutral ? getFlippedSpeeds(new ChassisSpeeds(kPassBumpSpeedsFwdBlue, 0, 0))
+								: getFlippedSpeeds(new ChassisSpeeds(kPassBumpSpeedsRevBlue, 0, 0)), true))
+				.withTimeout(kSimPassBumpTimer);
 	}
 
 	/** Returns the command to intake from the depot. */
@@ -535,8 +536,7 @@ public class AutonomousBuilder implements CustomRoutineBuilder {
 		return crossTower(crossRightToLeft).onlyIf(towerCrossCondition)
 				.andThen(RobotContainer.getInstance()
 						.getAutoManager()
-						.getPathfindCommand(path("Outpost"), AutoConstants.kPathfindSkipTolerance)
-						.alongWith(RobotContainer.getInstance().superstructure.startIntaking()))
+						.getPathfindCommand(path("Outpost"), AutoConstants.kPathfindSkipTolerance))
 				.andThen(Commands.waitSeconds(kOutpostIdleCooldown));
 	}
 
@@ -578,22 +578,130 @@ public class AutonomousBuilder implements CustomRoutineBuilder {
 				RobotContainer.getInstance().swerve.getFilteredPose());
 	}
 
+	/** Score after an objective has ended. */
+	private Command scoreAfterObjective(double scoreTime, boolean isObjective1) {
+		return new DeferredCommand(() -> scoreFuel(scoreTime, getOptimalScoringPose(isObjective1)), Set.of())
+				.onlyIf(() -> m_scoringModeChooser.get() == ScoringMode.kObjective1And2
+						|| (isObjective1 && m_scoringModeChooser.get() == ScoringMode.kObjective1)
+						|| (!isObjective1 && m_scoringModeChooser.get() == ScoringMode.kObjective2));
+	}
+
+	/** Returns the optimal pose to score the first 8 fuel. */
+	private Pose2d getPrescorePose() {
+		if (isPrimaryNeutralObjective())
+			return isCrossRightObjective1() ? AllianceUtil.flipWithAlliance(kScoringPoseRightBlue)
+					: AllianceUtil.flipWithAlliance(kScoringPoseLeftBlue);
+
+		if (m_objective1Chooser.get() == AutoObjective.kNone && m_parkChooser.get()) return null;
+		if (m_objective1Chooser.get() == AutoObjective.kScoreDepot && !m_redundantTowerCrossObj1.get())
+			return AllianceUtil.flipWithAlliance(kScoringPoseLeftBlue);
+		else if (m_objective1Chooser.get() == AutoObjective.kScoreDepot && m_redundantTowerCrossObj1.get())
+			return AllianceUtil.flipWithAlliance(kScoringPoseRightBlue);
+		if (m_objective1Chooser.get() == AutoObjective.kScoreOutpost && !m_redundantTowerCrossObj1.get())
+			return AllianceUtil.flipWithAlliance(kScoringPoseRightBlue);
+		else if (m_objective1Chooser.get() == AutoObjective.kScoreOutpost && m_redundantTowerCrossObj1.get())
+			return AllianceUtil.flipWithAlliance(kScoringPoseLeftBlue);
+
+		return getNearestScoringPose();
+	}
+
+	/** Returns the command to start scoring. */
+	private Command scoreFuel(double scoreTime, Pose2d scoringPose) {
+		return Commands.runOnce(RobotContainer.getInstance()::initAutonScoreFuelCommand)
+				// Align yaw during pathfind
+				.andThen(Commands.runOnce(() -> PPHolonomicDriveController
+						.overrideRotationFeedback(() -> DriveCommands.LatestShootingAngularVelocity)))
+				.andThen(new DeferredCommand(
+						() -> AutoBuilder.pathfindToPose(scoringPose, AutoConstants.kPathConstraints), Set.of())
+								.onlyIf(() -> scoringPose != null))
+				// Rotate to setpoint
+				.andThen(Commands
+						.run(() -> RobotContainer.getInstance().swerve.runSpeeds(0, 0,
+								DriveCommands.LatestShootingAngularVelocity, true))
+						.until(() -> RobotContainer.getInstance().swerve.ArbitraryPIDAngular.atSetpoint()
+								&& RobotContainer.getInstance().hood.isNearSetpoint()
+								&& RobotContainer.getInstance().rollers.isNearSetpoint()))
+				.andThen(Commands.print("Reached setpoint"))
+				// Wait and make sure to stay at the setpoint
+				.andThen(Commands.race(Commands.waitSeconds(scoreTime),
+						Commands.run(() -> RobotContainer.getInstance().swerve.runSpeeds(0, 0,
+								DriveCommands.LatestShootingAngularVelocity, true))))
+				.andThen(Commands.print("Seconds waited: " + scoreTime))
+				.finallyDo(() -> {
+					DriveCommands.LatestShootingAngularVelocity = 0;
+					RobotContainer.getInstance().swerve.ArbitraryPIDAngular.reset();
+					PPHolonomicDriveController.clearRotationFeedbackOverride();
+					RobotContainer.getInstance().cancelAutonScoreFuelCommand();
+					RobotContainer.getInstance().superstructure.setObjectiveOriented(true);
+				});
+	}
+
+	/** Returns the closest scoring pose for the hub. */
+	private Pose2d getNearestScoringPose() {
+		return RobotContainer.getInstance().swerve.getFilteredPose()
+				.nearest(List.of(AllianceUtil.flipWithAlliance(kScoringPoseRightBlue),
+						AllianceUtil.flipWithAlliance(kScoringPoseLeftBlue)));
+	}
+
+	/** Returns the optimal objective scoring pose for the hub. */
+	private Pose2d getOptimalScoringPose(boolean isObjective1) {
+		// Final scoring, just nearest scoring point
+		if (!isObjective1 && !m_parkChooser.get()) return getNearestScoringPose();
+		if (!isObjective1 && m_parkChooser.get()) return null;
+
+		// post-Objective 1, nearest scoring pose to the next objective
+		if (m_objective2Chooser.get() == AutoObjective.kNone) return getNearestScoringPose();
+		if (m_objective2Chooser.get() == AutoObjective.kScoreDepot && !m_passThroughTowerObj2.get())
+			return AllianceUtil.flipWithAlliance(kScoringPoseLeftBlue);
+		else if (m_objective2Chooser.get() == AutoObjective.kScoreDepot && m_passThroughTowerObj2.get())
+			return AllianceUtil.flipWithAlliance(kScoringPoseRightBlue);
+		if (m_objective2Chooser.get() == AutoObjective.kScoreOutpost && !m_passThroughTowerObj2.get())
+			return AllianceUtil.flipWithAlliance(kScoringPoseRightBlue);
+		else if (m_objective2Chooser.get() == AutoObjective.kScoreOutpost && m_passThroughTowerObj2.get())
+			return AllianceUtil.flipWithAlliance(kScoringPoseLeftBlue);
+
+		System.out.println("Invalid scoring! Is#1: " + isObjective1 + ", Obj2: " + m_objective2Chooser.get());
+
+		// Fallback
+		return getNearestScoringPose();
+	}
+
+	/** Returns the scoring time for objective 1. */
+	private double getObjective1ScoreTime() {
+		if (getObjective1Fuel() == 24) return k24ScoringTimer;
+		if (getObjective1Fuel() == 60) return k60ScoringTimer;
+		return k8ScoringTimer;
+	}
+
+	/** Returns the approximate fuel scored for objective 1. */
+	private double getObjective1Fuel() {
+		if (m_objective1Chooser.get() == AutoObjective.kScoreDepot
+				|| m_objective1Chooser.get() == AutoObjective.kScoreOutpost)
+			return 24;
+		if (isPrimaryNeutralObjective()) return 60;
+
+		// Could return 8, but fine to return 0
+		return 0;
+	}
+
+	private boolean isPrimaryNeutralObjective() {
+		var obj1 = m_objective1Chooser.get();
+		return obj1 == AutoObjective.kScoreNeutral || obj1 == AutoObjective.kScoreNeutralAdaptive
+				|| obj1 == AutoObjective.kScoreNeutralLoopOver || obj1 == AutoObjective.kScoreNeutralSweepOver;
+	}
+
 	/** Crosses the bump and follows a trajectory in the neutral zone. */
 	private Command neutralTrajectory(PathPlannerPath path, boolean neutralAlignRight) {
-		return AutoBuilder
-				.pathfindToPoseFlipped(
+		return crossTower(m_startingPointChooser.get() == AutoStartingPoint.kRight && !isCrossRightObjective1())
+				.onlyIf(m_passThroughTowerObj1::get)
+				.andThen(AutoBuilder.pathfindToPoseFlipped(
 						neutralAlignRight ? FieldConstants.kRobotPoseRightBlue : FieldConstants.kRobotPoseLeftBlue,
-						AutoConstants.kPathConstraints)
+						AutoConstants.kPathConstraints))
 				.andThen(Commands.runOnce(() -> RobotContainer.getInstance().cancelAutonScoreFuelCommand()))
 				.andThen(passBump(true))
 				.andThen(pathfindThenFollow(path))
 				.andThen(Commands.runOnce(() -> RobotContainer.getInstance().superstructure.stopIntake()))
 				.andThen(passBump(false))
-				.andThen(() -> RobotContainer.getInstance().swerve.stop())
-				.andThen(() -> {
-					if (!m_shouldScoreChooser.get()) return;
-					RobotContainer.getInstance().superstructure.setObjectiveOriented(false);
-					RobotContainer.getInstance().initAutonScoreFuelCommand();
-				});
+				.andThen(() -> RobotContainer.getInstance().swerve.stop());
 	}
 }

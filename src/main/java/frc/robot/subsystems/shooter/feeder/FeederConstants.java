@@ -22,7 +22,7 @@ public class FeederConstants {
 	public static final double kMotorSupplyLimitAmps = 30;
 	public static final double kMotorStatorLimitAmps = 45;
 
-	public static final boolean kIsFOC = true;
+	public static final boolean kIsFOC = false;
 
 	// Inversions
 	public static final boolean kMotorInverted = false;

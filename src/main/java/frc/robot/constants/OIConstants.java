@@ -19,16 +19,13 @@ public class OIConstants {
 	public static final Trigger kDriverZeroHeadingKeybind = kDriverController.options();
 	public static final Trigger kDriverSlowModeKeybind = kDriverController.circle();
 	public static final Trigger kDriverXBrakeKeybind = kDriverController.cross();
-	public static final Trigger kDriverExtendClimbKeybind = kDriverController.povUp();
-	public static final Trigger kDriverRetractClimbKeybind = kDriverController.povDown();
-	public static final Trigger kDriverAutomaticClimbKeybind = kDriverController.square();
+	public static final Trigger kDriverIntakeKeybind = kOperatorController.R1();
+	public static final Trigger kDriverOuttakeKeybind = kDriverController.L1();
+	public static final Trigger kDriverCloseIntakeKeybind = kDriverController.square();
 
 	// Operator Keybinds
 	public static final Trigger kOperatorToggleObjectiveKeybind = kOperatorController.triangle();
-	public static final Trigger kOperatorScoreHubKeybind = kOperatorController.R2();
-	public static final Trigger kOperatorPassFuelKeybind = kOperatorController.L2();
-	public static final Trigger kOperatorIntakeKeybind = kOperatorController.R1();
-	public static final Trigger kOperatorOuttakeKeybind = kOperatorController.L1();
-	public static final Trigger kOperatorCloseIntakeKeybind = kOperatorController.square();
+	public static final Trigger kOperatorScoreHubKeybind = kOperatorController.R1();
+	public static final Trigger kOperatorPassFuelKeybind = kOperatorController.L1();
 	public static final Trigger kOperatorCorralKeybind = kOperatorController.options();
 }

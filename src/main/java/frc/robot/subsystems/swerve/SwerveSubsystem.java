@@ -4,6 +4,7 @@ import static com.bobcats.lib.utils.Utils.roundDigits;
 import static edu.wpi.first.units.Units.Seconds;
 import static edu.wpi.first.units.Units.Volts;
 import static frc.robot.subsystems.swerve.SwerveConstants.DriveConstants.kDriveKinematics;
+import static frc.robot.subsystems.swerve.SwerveConstants.DriveConstants.kMaxSpeedMetersPerSecond;
 import static frc.robot.subsystems.swerve.SwerveConstants.DriveConstants.kSkewCorrectionFactor;
 
 import com.bobcats.lib.auto.LocalADStarAK;
@@ -84,7 +85,7 @@ public class SwerveSubsystem extends SubsystemBase {
 
 	// Odometry thread
 	public static Lock odometryLock = new ReentrantLock();
-	public static TalonFXOdometryThread odometryThread = new TalonFXOdometryThread();
+	public static TalonFXOdometryThread odometryThread;
 
 	private final Consumer<Pose2d> m_resetSim;
 
@@ -96,6 +97,7 @@ public class SwerveSubsystem extends SubsystemBase {
 	 * <p>
 	 * Note: Uses the default standard deviation baselines for vision.
 	 *
+	 * @param thread              The high frequency odometry thread.
 	 * @param frontLeft           The front left swerve module.
 	 * @param frontRight          The front right swerve module.
 	 * @param rearLeft            The back left swerve module.
@@ -107,9 +109,10 @@ public class SwerveSubsystem extends SubsystemBase {
 	 *                            a vector: {@code [x (m), y (m), theta (rads)]}.
 	 * @param visionIOs           The preset vision subystem IOs for localization.
 	 */
-	public SwerveSubsystem(SwerveModuleIO frontLeft, SwerveModuleIO frontRight, SwerveModuleIO rearLeft,
-			SwerveModuleIO rearRight, Gyro gyro, Consumer<Pose2d> resetSimulationPose, Matrix<N3, N1> odometryStdDevs,
-			LibVisionIO... visionIOs) {
+	public SwerveSubsystem(TalonFXOdometryThread thread, SwerveModuleIO frontLeft, SwerveModuleIO frontRight,
+			SwerveModuleIO rearLeft, SwerveModuleIO rearRight, Gyro gyro, Consumer<Pose2d> resetSimulationPose,
+			Matrix<N3, N1> odometryStdDevs, LibVisionIO... visionIOs) {
+		odometryThread = thread;
 		m_modules = new SwerveModule[] { new SwerveModule(frontLeft, 0), new SwerveModule(frontRight, 1),
 				new SwerveModule(rearLeft, 2), new SwerveModule(rearRight, 3) };
 
@@ -313,9 +316,15 @@ public class SwerveSubsystem extends SubsystemBase {
 		speeds = correctSkew(speeds);
 		speeds = ChassisSpeeds.discretize(speeds, Constants.kLoopPeriodSeconds);
 
-		var swerveModuleStates = DriveConstants.kDriveKinematics.toSwerveModuleStates(speeds);
+		// Limit speeds when shooting
 		double limitSpeed = RobotContainer.getInstance().superstructure.getChassisLimitVelocity();
-		SwerveDriveKinematics.desaturateWheelSpeeds(swerveModuleStates, limitSpeed);
+		double speed = Math.hypot(speeds.vxMetersPerSecond, speeds.vyMetersPerSecond);
+		if (speed > limitSpeed && !DriverStation.isAutonomous())
+			speeds = new ChassisSpeeds(speeds.vxMetersPerSecond * limitSpeed / speed,
+					speeds.vyMetersPerSecond * limitSpeed / speed, speeds.omegaRadiansPerSecond);
+
+		var swerveModuleStates = DriveConstants.kDriveKinematics.toSwerveModuleStates(speeds);
+		SwerveDriveKinematics.desaturateWheelSpeeds(swerveModuleStates, kMaxSpeedMetersPerSecond);
 		for (int i = 0; i < 4; i++)
 			m_modules[i].setDesiredState(swerveModuleStates[i]);
 	}

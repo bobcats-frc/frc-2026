@@ -15,9 +15,9 @@ public class RollerConstants {
 
 	// Control constants (PID-SVA)
 	// Units: Volts, RPM
-	public static final double kP = 0.001, kD = 0, kS = 0.0, kV = 0.0020594;
-	public static final double kPSim = 0.001, kDSim = 0, kSSim = 0.0, kVSim = 0.0020594;
-	public static final boolean kIsFOC = true;
+	public static final double kP = 0.001, kD = 0, kS = 0.0, kV = 0.0034339;
+	public static final double kPSim = 0.001, kDSim = 0, kSSim = 0.0, kVSim = 0.0034339;
+	public static final boolean kIsFOC = false;
 
 	public static final double kMaxTemperature = 80;
 
@@ -29,14 +29,14 @@ public class RollerConstants {
 	public static final double kMaxAllowedRPM = 4500;
 
 	// Gearbox reduction
-	public static final double kGearboxReduction = 1.0; // A 1:1 ratio (I/O)
+	public static final double kGearboxReduction = 20.0 / 12.0; // A 1:1 ratio
 
 	// Current limits for the motors
 	public static final double kMotorSupplyLimitAmps = 50.0;
 	public static final double kMotorStatorLimitAmps = 90.0;
 
 	// Inversions
-	public static final boolean kMotorInverted = false;
+	public static final boolean kMotorInverted = true;
 	public static final boolean kFollowerOpposesMain = true;
 
 	// Simulation data

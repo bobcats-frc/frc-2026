@@ -1,23 +1,19 @@
 package frc.robot;
 
 import static frc.robot.constants.FieldConstants.path;
-import static frc.robot.constants.OIConstants.kDriverAutomaticClimbKeybind;
 import static frc.robot.constants.OIConstants.kDriverController;
-import static frc.robot.constants.OIConstants.kDriverExtendClimbKeybind;
-import static frc.robot.constants.OIConstants.kDriverRetractClimbKeybind;
 import static frc.robot.constants.OIConstants.kDriverSlowModeKeybind;
 import static frc.robot.constants.OIConstants.kDriverXBrakeKeybind;
 import static frc.robot.constants.OIConstants.kDriverZeroHeadingKeybind;
 import static frc.robot.constants.OIConstants.kOperatorController;
 import static frc.robot.constants.OIConstants.kOperatorCorralKeybind;
-import static frc.robot.constants.OIConstants.kOperatorIntakeKeybind;
-import static frc.robot.constants.OIConstants.kOperatorOuttakeKeybind;
+import static frc.robot.constants.OIConstants.kDriverIntakeKeybind;
+import static frc.robot.constants.OIConstants.kDriverOuttakeKeybind;
 import static frc.robot.constants.OIConstants.kOperatorPassFuelKeybind;
 import static frc.robot.constants.OIConstants.kOperatorScoreHubKeybind;
 import static frc.robot.constants.OIConstants.kOperatorToggleObjectiveKeybind;
-import static frc.robot.subsystems.climb.ClimbConstants.kHasClimb;
 import static frc.robot.subsystems.shooter.hood.HoodConstants.kHoodCalibrationAngle;
-import static frc.robot.subsystems.shooter.turret.TurretConstants.kTurretCalibrationAngle;
+import static frc.robot.subsystems.superstructure.SuperstructureConstants.kShotYawMaxError;
 
 import com.bobcats.lib.auto.AutonomousManager;
 import com.bobcats.lib.auto.AutonomousManager.PathfindStrategy;
@@ -33,6 +29,7 @@ import com.pathplanner.lib.auto.NamedCommands;
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.VecBuilder;
 import edu.wpi.first.math.controller.PIDController;
+import edu.wpi.first.math.geometry.Pose3d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.wpilibj.Alert;
 import edu.wpi.first.wpilibj.Alert.AlertType;
@@ -47,10 +44,6 @@ import frc.robot.commands.drive.DriveCommands;
 import frc.robot.constants.Constants;
 import frc.robot.constants.FieldConstants;
 import frc.robot.constants.OIConstants;
-import frc.robot.subsystems.climb.Climb;
-import frc.robot.subsystems.climb.io.ClimbIO;
-import frc.robot.subsystems.climb.io.ClimbIOKraken;
-import frc.robot.subsystems.climb.io.ClimbIOSim;
 import frc.robot.subsystems.intake.Intake;
 import frc.robot.subsystems.intake.io.IntakeIO;
 import frc.robot.subsystems.intake.io.IntakeIOKraken;
@@ -67,10 +60,6 @@ import frc.robot.subsystems.shooter.rollers.Rollers;
 import frc.robot.subsystems.shooter.rollers.io.RollerIO;
 import frc.robot.subsystems.shooter.rollers.io.RollerIOKraken;
 import frc.robot.subsystems.shooter.rollers.io.RollerIOSim;
-import frc.robot.subsystems.shooter.turret.Turret;
-import frc.robot.subsystems.shooter.turret.io.TurretIO;
-import frc.robot.subsystems.shooter.turret.io.TurretIOKraken;
-import frc.robot.subsystems.shooter.turret.io.TurretIOSim;
 import frc.robot.subsystems.superstructure.Superstructure;
 import frc.robot.subsystems.superstructure.Superstructure.PrimaryState;
 import frc.robot.subsystems.swerve.SwerveConstants;
@@ -78,6 +67,7 @@ import frc.robot.subsystems.swerve.SwerveConstants.AutoConstants;
 import frc.robot.subsystems.swerve.SwerveConstants.DriveConstants;
 import frc.robot.subsystems.swerve.SwerveConstants.SwerveSimulationConstants;
 import frc.robot.subsystems.swerve.SwerveSubsystem;
+import frc.robot.subsystems.swerve.TalonFXOdometryThread;
 import frc.robot.subsystems.swerve.VisionConstants;
 import frc.robot.subsystems.swerve.gyro.Gyro;
 import frc.robot.subsystems.swerve.gyro.GyroIO;
@@ -115,11 +105,9 @@ public class RobotContainer {
 	public Feeder feeder;
 	public Hood hood;
 	public Rollers rollers;
-	public Turret turret;
 
 	// Generic systems
 	public Superstructure superstructure;
-	public Climb climb;
 	public ObjectDetectionIO objectDetectionCamRear;
 	public ObjectDetectionSubsystem objectDetection;
 
@@ -169,16 +157,11 @@ public class RobotContainer {
 						.andThen(Commands.runOnce(m_autoManager::scheduleAuto)));
 		RobotModeTriggers.autonomous().onFalse(Commands.runOnce(m_autoManager::cancelAuto));
 
-		// Extend climber in teleop when in climbing state to unclimb
-		if (kHasClimb) RobotModeTriggers.teleop()
-				.onTrue(superstructure.climbExtend()
-						.onlyIf(() -> superstructure.getPrimaryState() == PrimaryState.kClimbing));
-
 		// Disable objective oriented mode on disable
-		RobotModeTriggers.disabled()
-				.onTrue(Commands.runOnce(() -> superstructure.setObjectiveOriented(false))
-						.andThen(superstructure.stopShooter())
-						.ignoringDisable(true));
+		// RobotModeTriggers.disabled()
+		// .onTrue(Commands.runOnce(() -> superstructure.setObjectiveOriented(false))
+		// .andThen(superstructure.stopShooter())
+		// .ignoringDisable(true));
 	}
 
 	/** Registers all controller keybinds. */
@@ -199,14 +182,6 @@ public class RobotContainer {
 		kDriverSlowModeKeybind.onTrue(Commands.runOnce(() -> swerve.setSlowMode(!swerve.isSlowMode())));
 		// Stop the robot
 		kDriverXBrakeKeybind.whileTrue(Commands.run(swerve::setX));
-		// Climber keybinds
-		if (kHasClimb) {
-			kDriverExtendClimbKeybind.onTrue(superstructure.climbExtend());
-			kDriverRetractClimbKeybind.onTrue(superstructure.climbRetract());
-			kDriverAutomaticClimbKeybind.whileTrue(superstructure.alignClimberAndClimbCommand()
-					.handleInterrupt(
-							() -> { System.out.println("Align & Climb was interrupted!"); climb.extendArm(); }));
-		}
 
 		// Operator Keybinds //
 
@@ -214,18 +189,16 @@ public class RobotContainer {
 		kOperatorToggleObjectiveKeybind.onTrue(Commands.parallel(
 				Commands.runOnce(() -> superstructure.setObjectiveOriented(!superstructure.isObjectiveOriented())),
 				superstructure.stopShooter()
-						.andThen(Commands.parallel(
-								Commands.runOnce(() -> turret.setTurretAngle(kTurretCalibrationAngle)),
-								Commands.runOnce(() -> hood.setHoodAngle(kHoodCalibrationAngle))))));
+						.andThen(Commands.runOnce(() -> hood.setHoodAngle(kHoodCalibrationAngle)))));
 		kOperatorScoreHubKeybind.onTrue(superstructure.objectiveScoreHub());
 		kOperatorPassFuelKeybind.onTrue(superstructure.objectivePassFuelAlliance());
 		// Intake bindings
-		kOperatorIntakeKeybind.whileTrue(superstructure.startIntaking());
-		kOperatorIntakeKeybind.onFalse(
+		kDriverIntakeKeybind.whileTrue(superstructure.startIntaking());
+		kDriverIntakeKeybind.onFalse(
 				superstructure.stopIntake().onlyIf(() -> superstructure.getPrimaryState() == PrimaryState.kIntaking));
 		// Outtake bindings
-		kOperatorOuttakeKeybind.whileTrue(superstructure.startOuttaking());
-		kOperatorOuttakeKeybind.onFalse(
+		kDriverOuttakeKeybind.whileTrue(superstructure.startOuttaking());
+		kDriverOuttakeKeybind.onFalse(
 				superstructure.stopIntake().onlyIf(() -> superstructure.getPrimaryState() == PrimaryState.kOuttaking));
 		kOperatorCorralKeybind.whileTrue(superstructure.alignCorralOuttake());
 		kOperatorCorralKeybind.onFalse(superstructure.stopIntake());
@@ -243,15 +216,7 @@ public class RobotContainer {
 				Commands.runOnce(this::cancelAutonScoreFuelCommand)
 						.andThen(Commands.runOnce(() -> superstructure.setObjectiveOriented(false)))
 						.andThen(superstructure.stopShooter())
-						.andThen(Commands.parallel(
-								Commands.runOnce(() -> turret.setTurretAngle(kTurretCalibrationAngle)),
-								Commands.runOnce(() -> hood.setHoodAngle(kHoodCalibrationAngle)))));
-
-		// Climb commands
-		NamedCommands.registerCommand("ClimbExtend", superstructure.climbExtend());
-		NamedCommands.registerCommand("ClimbRetract", superstructure.climbRetract());
-		NamedCommands.registerCommand("AlignAndClimb", superstructure.alignClimberAndClimbCommand());
-		NamedCommands.registerCommand("ClimbSequenced", superstructure.climbSequenceAuton());
+						.andThen(Commands.runOnce(() -> hood.setHoodAngle(kHoodCalibrationAngle))));
 
 		NamedCommands.registerCommand("PathfindDepot",
 				m_autoManager.getPathfindCommand(path("Depot"), AutoConstants.kPathfindSkipTolerance));
@@ -289,11 +254,6 @@ public class RobotContainer {
 						Rotation2d.fromDegrees(-210), VisionConstants.kCameraCalibTagDist));
 
 		// Add mechanism tests
-		m_testChooser.addOption("SysId Turret",
-				() -> turret.sysIdQuasistatic(Direction.kForward)
-						.andThen(turret.sysIdQuasistatic(Direction.kReverse))
-						.andThen(turret.sysIdDynamic(Direction.kForward))
-						.andThen(turret.sysIdDynamic(Direction.kReverse)));
 		m_testChooser.addOption("SysId Rollers",
 				() -> rollers.sysIdQuasistatic(Direction.kForward)
 						.andThen(rollers.sysIdQuasistatic(Direction.kReverse))
@@ -317,25 +277,29 @@ public class RobotContainer {
 
 	/** Initializes the chassis. */
 	private void initSwerveAndVision() {
+		TalonFXOdometryThread thread = new TalonFXOdometryThread();
 		switch (Robot.kRobotMode) {
 			case kReal:
 				swerveSim = null;
 				Gyro gyro = new Gyro(new GyroIOPigeon2(DriveConstants.kPigeon2CanId, SwerveConstants.kDrivetrainBus));
 
-				swerve = new SwerveSubsystem(new SwerveModuleIOKraken(0), new SwerveModuleIOKraken(1),
+				swerve = new SwerveSubsystem(thread, new SwerveModuleIOKraken(0), new SwerveModuleIOKraken(1),
 						new SwerveModuleIOKraken(2), new SwerveModuleIOKraken(3), gyro, null,
 						VisionConstants.kOdometryStdDevs,
-						new LibVisionIOLimelight(VisionConstants.kLLName_Right,
-								() -> Rotation2d.fromDegrees(gyro.getInputs().yawDegrees),
-								VisionConstants.kRobotToCamera_Right),
 						new LibVisionIOLimelight(VisionConstants.kLLName_Left,
 								() -> Rotation2d.fromDegrees(gyro.getInputs().yawDegrees),
 								VisionConstants.kRobotToCamera_Left));
+				// spotless:off
+						// new LibVisionIOLimelight(VisionConstants.kLLName_Right,
+						//		() -> Rotation2d.fromDegrees(gyro.getInputs().yawDegrees),
+						//		VisionConstants.kRobotToCamera_Right)
+						// spotless:on
 				// Arbitrary PIDs
 				swerve.ArbitraryPIDx = new PIDController(AutoConstants.kPathDriveP, 0, AutoConstants.kPathDriveD);
 				swerve.ArbitraryPIDy = new PIDController(AutoConstants.kPathDriveP, 0, AutoConstants.kPathDriveD);
 				swerve.ArbitraryPIDAngular = new PIDController(AutoConstants.kPathTurnP, 0, AutoConstants.kPathTurnD);
 				swerve.ArbitraryPIDAngular.enableContinuousInput(-Math.PI, Math.PI);
+				swerve.ArbitraryPIDAngular.setTolerance(kShotYawMaxError);
 
 				// Initialize the object detection
 				objectDetectionCamRear = new ObjectDetectionIOLimelight(VisionConstants.kLLName_Left,
@@ -353,27 +317,29 @@ public class RobotContainer {
 						AllianceUtil.flipWithAlliance(Constants.kStartingPose));
 				SimulatedArena.getInstance().addDriveTrainSimulation(swerveSim);
 
-				swerve = new SwerveSubsystem(new SwerveModuleIOSim(swerveSim.getModules()[0]),
+				swerve = new SwerveSubsystem(thread, new SwerveModuleIOSim(swerveSim.getModules()[0]),
 						new SwerveModuleIOSim(swerveSim.getModules()[1]),
 						new SwerveModuleIOSim(swerveSim.getModules()[2]),
 						new SwerveModuleIOSim(swerveSim.getModules()[3]),
 						new Gyro(new GyroIOSim(swerveSim.getGyroSimulation())), swerveSim::setSimulationWorldPose,
 						VisionConstants.kOdometryStdDevs,
-						new LibVisionIOPhotonVisionSim(VisionConstants.kLLName_Right,
-								VisionConstants.kRobotToCamera_Right, null,
-								() -> superstructure.superstructureVisualizer
-										.getRobotPoseWithHeight(swerveSim.getSimulatedDriveTrainPose()),
-								VisionConstants.kSimCameraProperties),
 						new LibVisionIOPhotonVisionSim(VisionConstants.kLLName_Left,
 								VisionConstants.kRobotToCamera_Left, null,
-								() -> superstructure.superstructureVisualizer
-										.getRobotPoseWithHeight(swerveSim.getSimulatedDriveTrainPose()),
+								() -> new Pose3d(swerveSim.getSimulatedDriveTrainPose()),
 								VisionConstants.kSimCameraProperties));
+				// spotless:off
+						// new LibVisionIOPhotonVisionSim(VisionConstants.kLLName_Right,
+						//		VisionConstants.kRobotToCamera_Right, null,
+						//		() -> new Pose3d(swerveSim.getSimulatedDriveTrainPose()),
+						//		VisionConstants.kSimCameraProperties));
+						// spotless:on
 				// Arbitrary PIDs
-				swerve.ArbitraryPIDx = new PIDController(AutoConstants.kPathDriveP, 0, AutoConstants.kPathDriveD);
-				swerve.ArbitraryPIDy = new PIDController(AutoConstants.kPathDriveP, 0, AutoConstants.kPathDriveD);
-				swerve.ArbitraryPIDAngular = new PIDController(AutoConstants.kPathTurnP, 0, AutoConstants.kPathTurnD);
+				swerve.ArbitraryPIDx = new PIDController(AutoConstants.kPathDrivePSim, 0, AutoConstants.kPathDriveDSim);
+				swerve.ArbitraryPIDy = new PIDController(AutoConstants.kPathDrivePSim, 0, AutoConstants.kPathDriveDSim);
+				swerve.ArbitraryPIDAngular = new PIDController(AutoConstants.kPathTurnPSim, 0,
+						AutoConstants.kPathTurnDSim);
 				swerve.ArbitraryPIDAngular.enableContinuousInput(-Math.PI, Math.PI);
+				swerve.ArbitraryPIDAngular.setTolerance(kShotYawMaxError);
 
 				// Initialize the object detection
 				objectDetectionCamRear = new ObjectDetectionIOPhotonVisionSim(VisionConstants.kLLName_Left + "_od",
@@ -403,9 +369,9 @@ public class RobotContainer {
 			case kReplay:
 				swerveSim = null;
 				// Dummy IOs for replay
-				swerve = new SwerveSubsystem(new SwerveModuleIO() {}, new SwerveModuleIO() {}, new SwerveModuleIO() {},
-						new SwerveModuleIO() {}, new Gyro(new GyroIO() {}), null, VecBuilder.fill(0.1, 0.1, 0.05),
-						new LibVisionIO() {});
+				swerve = new SwerveSubsystem(thread, new SwerveModuleIO() {}, new SwerveModuleIO() {},
+						new SwerveModuleIO() {}, new SwerveModuleIO() {}, new Gyro(new GyroIO() {}), null,
+						VecBuilder.fill(0.1, 0.1, 0.05), new LibVisionIO() {});
 				objectDetection = new ObjectDetectionSubsystem("Fuel", new ObjectDetectionIO() {});
 			default:
 				break;
@@ -428,21 +394,18 @@ public class RobotContainer {
 				feeder = new Feeder(new FeederIOKraken());
 				hood = new Hood(new HoodIOKraken());
 				rollers = new Rollers(new RollerIOKraken());
-				turret = new Turret(new TurretIOKraken());
 				break;
 
 			case kSim:
 				feeder = new Feeder(new FeederIOSim());
 				hood = new Hood(new HoodIOSim());
 				rollers = new Rollers(new RollerIOSim());
-				turret = new Turret(new TurretIOSim());
 				break;
 
 			case kReplay:
 				feeder = new Feeder(new FeederIO() {});
 				hood = new Hood(new HoodIO() {});
 				rollers = new Rollers(new RollerIO() {});
-				turret = new Turret(new TurretIO() {});
 				break;
 
 			default:
@@ -473,26 +436,9 @@ public class RobotContainer {
 		}
 	}
 
-	/** Initializes the climb mechanism and the superstructure. */
+	/** Initializes the the superstructure. */
 	private void initSuperstructure() {
-		switch (Robot.kRobotMode) {
-			case kReal:
-				climb = new Climb(kHasClimb ? new ClimbIOKraken() : new ClimbIO() {});
-				break;
-
-			case kSim:
-				climb = new Climb(new ClimbIOSim());
-				break;
-
-			case kReplay:
-				climb = new Climb(new ClimbIO() {});
-				break;
-
-			default:
-				break;
-		}
-
-		superstructure = new Superstructure(feeder, hood, rollers, turret, climb, intake, swerve);
+		superstructure = new Superstructure(feeder, hood, rollers, intake, swerve);
 	}
 
 	/**
@@ -520,7 +466,6 @@ public class RobotContainer {
 	public void zeroSubsytemEncoders() {
 		intake.zeroEncoders();
 		hood.zeroEncoders();
-		turret.zeroEncoders();
 		rollers.zeroEncoders();
 	}
 

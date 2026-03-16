@@ -13,19 +13,19 @@ public class IntakeConstants {
 	public static final String kArmMotorCANBus = "";
 
 	// Control parameters
-	public static final boolean kIsFOC = true;
+	public static final boolean kIsFOC = false;
 	// Voltage when intaking, ~2000-2500 RPM for the Kraken X60.
 	public static final double kIntakeRollerVoltage = 4.5;
 	public static final double kOuttakeRollerVoltage = -3.5;
 	// Arm PID
 	// Units: Volts, Degrees
 	public static final double kP = 0.01, kD = 0.001, kG = 0;
-	public static final double kPSim = 0.01, kDSim = 0.001, kGSim = 0;
-	public static final double kMotionMagicMaxVelocityDegPerSec = 720;
+	public static final double kPSim = 0.02, kDSim = 0.001, kGSim = 0;
+	public static final double kMotionMagicMaxVelocityDegPerSec = 14400;
 	public static final double kMotionMagicAccelerationDegPerSecSq = 2880 * 2;
 	// The angle at which the encoders are zeroed, the angle at the start of the match
 	public static final double kArmCalibrationAngleDeg = 90;
-	public static final double kArmClosedAngle = 90, kArmOpenedAngle = 0;
+	public static final double kArmClosedAngle = 90, kArmOpenedAngle = 0, kArmPushFuelAngle = 45;
 	public static final double kArmMinAngle = 0, kArmMaxAngle = 90;
 
 	public static final double kArmMaxTemperature = 80;
@@ -33,8 +33,8 @@ public class IntakeConstants {
 
 	// TODO exact values
 	// Gearbox reduction
-	public static final double kRollerGearboxReduction = 1; // A 1:1 ratio (I/O)
-	public static final double kArmGearboxReduction = 2.0 / 3.0; // A 5:1 ratio (I/O)
+	public static final double kRollerGearboxReduction = 20.0 / 12.0; // A 1:1 ratio
+	public static final double kArmGearboxReduction = 20.0 / 12.0; // A 3:5 ratio
 
 	// Current limits for the motor
 	public static final double kRollerMotorSupplyLimitAmps = 20.0;
@@ -45,7 +45,7 @@ public class IntakeConstants {
 
 	// Inversions
 	public static final boolean kRollerMotorInverted = false;
-	public static final boolean kArmMotorInverted = false;
+	public static final boolean kArmMotorInverted = true;
 
 	// Simulation data
 	// Roller simulation

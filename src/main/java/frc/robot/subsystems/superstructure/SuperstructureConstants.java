@@ -1,23 +1,17 @@
 package frc.robot.subsystems.superstructure;
 
-import static frc.robot.subsystems.climb.ClimbConstants.kGearboxReduction;
-import static frc.robot.subsystems.climb.ClimbConstants.kSpoolRadius;
+import static frc.robot.subsystems.shooter.hood.HoodConstants.kHoodCentralPivotRobotRelative;
 
 import com.bobcats.lib.container.Vector3;
 import com.bobcats.lib.control.shooter.ShooterCalculator.ShooterParameters;
 import com.bobcats.lib.control.shooter.data.ShooterDescriptor;
 import com.bobcats.lib.control.shooter.data.ShooterProjectileType;
 import com.bobcats.lib.math.BilinearInterpolator2D;
-import com.bobcats.lib.region.RectangularRegion;
-import com.bobcats.lib.utils.AllianceUtil;
 import edu.wpi.first.math.geometry.Rotation2d;
-import edu.wpi.first.math.geometry.Transform3d;
-import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.geometry.Translation3d;
 import edu.wpi.first.math.interpolation.InterpolatingDoubleTreeMap;
 import edu.wpi.first.math.util.Units;
 import edu.wpi.first.wpilibj.util.Color;
-import frc.robot.subsystems.shooter.turret.TurretConstants;
 
 /** The class storing the constants required for the Superstructure. */
 public class SuperstructureConstants {
@@ -37,35 +31,8 @@ public class SuperstructureConstants {
 	// Always search for the most optimal path instead
 	public static final double kPassFuelAcceptDistance = 0;
 
-	public static final String kClimberPreAlignPathRight = "ClimberAlignRightPre";
-	public static final String kClimberPreAlignPathLeft = "ClimberAlignLeftPre";
-	public static final String kClimberPostAlignPathRight = "ClimberAlignRightPost";
-	public static final String kClimberPostAlignPathLeft = "ClimberAlignLeftPost";
-
 	public static final String kCorralAlignPath = "CorralAlign";
 	public static final double kCorralOuttakeTimerLimit = 2.0;
-
-	// public static final double kClimberRobotUnclimbHeightThreshold = 0.05;
-	public static final double kClimberMetersPerMotorRev = 2 * Math.PI * kSpoolRadius / kGearboxReduction;
-	public static final double kClimberRobotClimbHeightThreshold = 0.01;
-	public static final double kClimberRobotOscillateAmpl = 0.005;
-	public static final double kClimberRobotOscillateFreq = 2;
-	public static final double kClimberRobotOscillateRestAngle = -Math.toRadians(10);
-	// TODO Use actual measurements
-	public static final RectangularRegion kClimberValidClimbRegionRightBlue = new RectangularRegion(
-			new Translation2d(0.578 - 0.08, 2.863 - 0.08), new Translation2d(0.705 + 0.08, 2.995 + 0.08));
-	public static final RectangularRegion kClimberValidClimbRegionLeftBlue = new RectangularRegion(
-			new Translation2d(0, 0), new Translation2d(5, 10));
-	public static final RectangularRegion kClimberValidClimbRegionRightRed = new RectangularRegion(
-			AllianceUtil.flipWithAlliance(new Translation2d(0.578 - 0.08, 2.863 - 0.08)),
-			AllianceUtil.flipWithAlliance(new Translation2d(0.705 + 0.08, 2.995 + 0.08)));
-	public static final RectangularRegion kClimberValidClimbRegionLeftRed = new RectangularRegion(
-			AllianceUtil.flipWithAlliance(new Translation2d(0, 0)),
-			AllianceUtil.flipWithAlliance(new Translation2d(5, 10)));
-
-	// Threshold for pitch angle difference to detect climb state changes
-	// Only downside is when tipping over
-	public static final double kClimbPitchAngleDiffThreshold = 6;
 
 	// Shot calculator data
 	// Soft-limit of the maximum allowed shot distance
@@ -74,8 +41,10 @@ public class SuperstructureConstants {
 
 	public static final double kRollerRadiusMeters = Units.inchesToMeters(2);
 	public static final double kBarrelLengthMeters = 0;
-	public static final Transform3d kPivotOffset = new Transform3d();
 	public static final double kAverageShotTime = 1.0 / 5.0;
+
+	// Shooting chassis yaw error tolerance for angular PID
+	public static final double kShotYawMaxError = Math.toRadians(3.0);
 
 	public static final Color kShooterReadyFlashColor = new Color(208, 0, 245);
 	public static final Color kShooterNotReadyFlashColor = new Color(245, 57, 0);
@@ -93,15 +62,9 @@ public class SuperstructureConstants {
 	// About a step size of 1.6in
 	public static final int kPassTrajOptSteps = 200;
 
-	// Climb shot parameters, ok to leave some parameters blank since they are
-	// re-calculated in sim, and not used at all in real mode
-	public static final ShooterParameters kClimbedShootingParametersLeftBlue = new ShooterParameters(true,
-			Rotation2d.kZero, Rotation2d.fromDegrees(180 - 17.5), 65, 2300, 0, Translation3d.kZero, Vector3.kZero, 0);
-	public static final ShooterParameters kClimbedShootingParametersRightBlue = new ShooterParameters(true,
-			Rotation2d.kZero, Rotation2d.fromDegrees(180 + 17.5), 65, 2300, 0, Translation3d.kZero, Vector3.kZero, 0);
-	// TODO make sure to autoflip
-	public static final ShooterParameters kPresetShootingParametersBlue = new ShooterParameters(true, Rotation2d.kZero,
-			Rotation2d.fromDegrees(180 + 80.5), 65, 2300, 0, Translation3d.kZero, Vector3.kZero, 0);
+	public static final ShooterParameters kPresetShootingParametersBlue = new ShooterParameters(true,
+			Rotation2d.fromDegrees(80.5), Rotation2d.fromDegrees(180 + 80.5), 65, 2300, 0, Translation3d.kZero,
+			Vector3.kZero, 0);
 
 	public static final int kPreloadedFuelAmount = 8;
 
@@ -146,16 +109,15 @@ public class SuperstructureConstants {
 			kHeightDiffMap, kTimeOfFlightMap);
 
 	public static final ShooterDescriptor kShooterDescriptor = new ShooterDescriptor.Builder(kRollerRadiusMeters,
-			kPivotOffset).barrelLength(kBarrelLengthMeters)
+			kHoodCentralPivotRobotRelative).barrelLength(kBarrelLengthMeters)
 					.dataSet(kAngleInterpolator, kRPMInterpolator, kTimeOfFlightInterpolator)
 					.setDistanceLimits(kMinAllowedShotDistance, kMaxAllowedShotDistance)
 					.shotDelay(kShotDelay)
-					.turretAngleRange(TurretConstants.kMinAngleDeg, TurretConstants.kMaxAngleDeg)
 					.build();
 
 	public static final boolean kLimitVelocityWhenShootingTeleop = true;
-	public static final double kLimitK0Hub = 0.9;
-	public static final double kLimitK1Hub = 1.0;
+	public static final double kLimitK0Hub = 0.90;
+	public static final double kLimitK1Hub = 0.60;
 
 	public static final double kLimitK0Pass = 0.86;
 	public static final double kLimitK1Pass = 0.60;
