@@ -28,6 +28,7 @@ import edu.wpi.first.math.system.plant.LinearSystemId;
 import edu.wpi.first.math.trajectory.TrapezoidProfile;
 import edu.wpi.first.math.util.Units;
 import org.ironmaple.simulation.SimulatedArena;
+import org.littletonrobotics.junction.Logger;
 
 /** The IO sim implementation for intake hardware interacions without any hardware. */
 public class IntakeIOSim implements IntakeIO {
@@ -72,6 +73,10 @@ public class IntakeIOSim implements IntakeIO {
 			m_armSim.setInputVoltage(ffOutput + pidOutput);
 		}
 
+		Logger.recordOutput("Intake/SimArmPIDSetpoint", m_armPid.getSetpoint());
+		Logger.recordOutput("Intake/SimArmPIDGoal", m_armPid.getGoal());
+		Logger.recordOutput("Intake/SimArmIsSetpoint", m_isArmSetpoint);
+
 		inputs.rollerMotorConnected = true;
 		inputs.rollerAppliedVoltage = m_rollerSim.getAppliedInputVoltage();
 		inputs.rollerRpm = m_rollerSim.getOutputAngularVelocityRPM();
@@ -86,6 +91,12 @@ public class IntakeIOSim implements IntakeIO {
 		inputs.armSupplyCurrentAmps = Math.abs(m_armSim.getCurrentDrawAmps() * m_armSim.getInput(0) / 12.0);
 		inputs.armStatorCurrentAmps = Math.abs(m_armSim.getCurrentDrawAmps());
 		inputs.armTemperatureCelsius = 20;
+	}
+
+	@Override
+	public void stopArm() {
+		runArmVolts(0);
+		m_armPid.reset(Math.toDegrees(m_armSim.getAngleRads()), 0.0);
 	}
 
 	@Override
@@ -108,5 +119,6 @@ public class IntakeIOSim implements IntakeIO {
 	@Override
 	public void zeroArmEncoders() {
 		m_armSim.setState(kArmCalibrationAngleDeg, 0);
+		m_armPid.reset(kArmCalibrationAngleDeg);
 	}
 }

@@ -19,7 +19,7 @@ public class OIConstants {
 	public static final Trigger kDriverZeroHeadingKeybind = kDriverController.options();
 	public static final Trigger kDriverSlowModeKeybind = kDriverController.circle();
 	public static final Trigger kDriverXBrakeKeybind = kDriverController.cross();
-	public static final Trigger kDriverIntakeKeybind = kOperatorController.R1();
+	public static final Trigger kDriverIntakeKeybind = kDriverController.R1();
 	public static final Trigger kDriverOuttakeKeybind = kDriverController.L1();
 	public static final Trigger kDriverCloseIntakeKeybind = kDriverController.square();
 

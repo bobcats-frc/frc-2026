@@ -22,16 +22,6 @@ import static frc.robot.commands.AutonomousBuilderConstants.kScoringVelocityLimi
 import static frc.robot.commands.AutonomousBuilderConstants.kSimPassBumpTimer;
 import static frc.robot.constants.FieldConstants.path;
 
-import java.io.IOException;
-import java.util.List;
-import java.util.Set;
-import java.util.function.BooleanSupplier;
-import java.util.function.Supplier;
-
-import org.json.simple.parser.ParseException;
-import org.littletonrobotics.junction.Logger;
-import org.littletonrobotics.junction.networktables.LoggedDashboardChooser;
-
 import com.bobcats.lib.auto.CustomRoutineBuilder;
 import com.bobcats.lib.utils.AllianceUtil;
 import com.pathplanner.lib.auto.AutoBuilder;
@@ -39,7 +29,6 @@ import com.pathplanner.lib.path.PathConstraints;
 import com.pathplanner.lib.path.PathPlannerPath;
 import com.pathplanner.lib.util.FileVersionException;
 import com.pathplanner.lib.util.FlippingUtil;
-
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
@@ -61,6 +50,14 @@ import frc.robot.subsystems.swerve.VisionConstants;
 import frc.robot.util.CustomPPHolonomicDriveController;
 import frc.robot.util.TrajectoryUtils2026;
 import frc.robot.util.TrajectoryUtils2026.GeneratorParams;
+import java.io.IOException;
+import java.util.List;
+import java.util.Set;
+import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
+import org.json.simple.parser.ParseException;
+import org.littletonrobotics.junction.Logger;
+import org.littletonrobotics.junction.networktables.LoggedDashboardChooser;
 
 /**
  * A class for building custom autonomous routines based on dashboard selections.

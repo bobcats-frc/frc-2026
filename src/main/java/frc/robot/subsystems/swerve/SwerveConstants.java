@@ -72,9 +72,9 @@ public final class SwerveConstants {
 
 		// Chassis configuration
 		// Distance between the centers of the right and left wheels on robot
-		public static final double kTrackWidth = 0.54165; // meters
+		public static final double kTrackWidth = 0.578374234; // meters
 		// Distance between the centers of the front and back wheels on robot
-		public static final double kWheelBase = 0.57665; // meters
+		public static final double kWheelBase = 0.542484624; // meters
 		// Instantiate the kinematics
 		public static final SwerveDriveKinematics kDriveKinematics = new SwerveDriveKinematics(
 				new Translation2d(kWheelBase / 2, kTrackWidth / 2), new Translation2d(kWheelBase / 2, -kTrackWidth / 2),

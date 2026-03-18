@@ -1,5 +1,6 @@
 package frc.robot.subsystems.shooter.hood;
 
+import edu.wpi.first.math.geometry.Rotation3d;
 import edu.wpi.first.math.geometry.Transform3d;
 import edu.wpi.first.math.system.plant.DCMotor;
 
@@ -15,16 +16,16 @@ public class HoodConstants {
 
 	// Control constants (PID-SVA)
 	// Units: Volts, Degrees, deg/s
-	public static final double kMinAngleDeg = 0, kMaxAngleDeg = 90;
+	public static final double kMinAngleDeg = 0.0, kMaxAngleDeg = 16.7;
 	// M_arm = 0.953kg
 	// Voltage gains
 	// R: Resistance, kT: Torque coeff., M: Arm mass, r_com: CG distance (meters), G: Reduction
 	// I = T / G*kT, I = M*g*r_com / G*kT, V = IR @ w=0,
 	// Hence kG at horizontal is approx. R*M*r_com*g / G*kT, V(theta) = kG*cos(theta)
-	public static final double kP = 0.08, kD = 0.0009, kS = 0, kV = 0.054, kG = 0.240;
+	public static final double kP = 0.08, kD = 0.0009, kS = 0, kV = 0.054, kG = 0.40;
 	// public static final double kPSim = 0.18, kDSim = 0.006, kSSim = 0, kVSim = 0, kGSim =
 	// 0.3641;
-	public static final double kPSim = 0.08, kDSim = 0.0009, kSSim = 0, kVSim = 0.054, kGSim = 0.240;
+	public static final double kPSim = 0.08, kDSim = 0.0009, kSSim = 0, kVSim = 0.054, kGSim = 0.40;
 	// MotionMagic values
 	public static final double kMotionMagicMaxVelocityDegPerSec = 720 * 3.0;
 	public static final double kMotionMagicAccelerationDegPerSecSq = 1440 * 3.0;
@@ -32,7 +33,7 @@ public class HoodConstants {
 
 	public static final double kMaxTemperature = 80;
 
-	public static final double kExitAngleOffset = 90;// 61.5;
+	public static final double kExitAngleOffset = 63.4;
 
 	public static final double kSysIdVoltageRampRate = 3;
 	public static final double kSysIdVoltageStep = 0.9;
@@ -47,7 +48,7 @@ public class HoodConstants {
 	public static final double kHoodCalibrationYaw = 90.0;
 
 	// Gearbox reduction
-	public static final double kGearboxReduction = 500.0 / 24.0; // A 300:24 ratio
+	public static final double kGearboxReduction = 300.0 / 24.0; // A 300:24 ratio
 
 	// Current limits for the motors
 	public static final double kMotorSupplyLimitAmps = 50.0;
@@ -60,5 +61,6 @@ public class HoodConstants {
 	public static final DCMotor kGearbox = DCMotor.getKrakenX44Foc(1);
 	public static final double kCenterOfMassDistance = 0.169; // meters
 	public static final double kMomentOfInertia = 0.031090146;
-	public static final Transform3d kHoodCentralPivotRobotRelative = Transform3d.kZero;
+	public static final Transform3d kHoodCentralPivotRobotRelative = new Transform3d(0.122173567, 0.00185111465,
+			0.536099189, Rotation3d.kZero);
 }

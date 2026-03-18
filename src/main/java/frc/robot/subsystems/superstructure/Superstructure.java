@@ -594,8 +594,10 @@ public class Superstructure extends SubsystemBase {
 			// Continuously update shooter setpoints
 			updateShooterSetpointState(target.get());
 			if (m_latestParameters != null && m_latestParameters.isValid()) {
-				m_rollers.setRollerVelocity(m_latestParameters.rollerSpeedsRPM());
-				m_hood.setHoodAngle(kExitAngleOffset - m_latestParameters.hoodAngleDegs());
+				if (!overrideRollerSetpointChooser.get())
+					m_rollers.setRollerVelocity(m_latestParameters.rollerSpeedsRPM());
+				if (!overrideHoodSetpointChooser.get())
+					m_hood.setHoodAngle(kExitAngleOffset - m_latestParameters.hoodAngleDegs());
 			}
 
 			// Update commanded shot angular velocity
@@ -626,7 +628,6 @@ public class Superstructure extends SubsystemBase {
 				// Stop feeder when unable to fire
 				.alongWith(Commands.run(() -> { if (!canFire.getAsBoolean()) stopFeeding(); }))
 				.alongWith(Commands.run(() -> {
-					// TODO Needs testing
 					// Oscillate intake
 					if (m_primaryState != PrimaryState.kIntaking && m_primaryState != PrimaryState.kOuttaking
 							&& canFire.getAsBoolean()) {
@@ -651,7 +652,6 @@ public class Superstructure extends SubsystemBase {
 								m_intakeOscillationTimer.reset();
 							}
 				}))
-				// .alongWith(Commands.run(() -> { if (!canFire.getAsBoolean()) stopFeeding(); }))
 				.onlyWhile(() -> m_isObjectiveOriented)
 				.finallyDo(() -> {
 					DriveCommands.LatestShootingAngularVelocity = 0;
@@ -663,56 +663,14 @@ public class Superstructure extends SubsystemBase {
 					m_intakeOscillationTimer.reset();
 				});
 
-		// return Commands.parallel(Commands.run(() ->
-		// updateShooterSetpointState(target.get())),
-		// Commands.repeatingSequence(Commands.parallel(
-		// Commands.runOnce(() ->
-		// m_rollers.setRollerVelocity(m_latestParameters.rollerSpeedsRPM())),
-		// Commands.runOnce(
-		// () ->
-		// m_turret.setTurretAngle(m_latestParameters.turretAngleRobot().getDegrees())),
-		// Commands.runOnce(() ->
-		// m_hood.setHoodAngle(m_latestParameters.hoodAngleDegs())))
-		// .andThen(Commands.waitUntil(() -> m_hood.isNearSetpoint() &&
-		// m_turret.isNearSetpoint()
-		// && m_rollers.isNearSetpoint()))
-		// .andThen(Commands.runOnce(m_feeder::feed))
-		// .onlyIf(() -> Math
-		// .abs(Timer.getFPGATimestamp() - m_lastShooterUpdate) <=
-		// kShooterStateStaleTimeThreshold
-		// && m_latestParameters.isValid()
-		// && target.get()
-		// .getDistance(new Pose3d(m_swerve.getFilteredPose())
-		// .getTranslation()) <= kMaxAllowedShotDistance)
-		// .finallyDo(m_feeder::stop)));
-		// .onlyWhile(() -> m_isObjectiveOriented && m_primaryState !=
-		// PrimaryState.kClimbing);
-
-		// return Commands.sequence(Commands.waitUntil(canFire), Commands.runOnce(() ->
-		// m_feeder.feed(), m_feeder))
-		// .repeatedly()
-		// .alongWith(Commands.run(() -> {
-		// // Continuously update shooter setpoints
-		// updateShooterSetpointState(target.get());
-		// if (m_latestParameters != null && m_latestParameters.isValid()) {
-		// m_rollers.setRollerVelocity(m_latestParameters.rollerSpeedsRPM());
-		// m_turret.setTurretAngle(m_latestParameters.turretAngleRobot().getDegrees());
-		// m_hood.setHoodAngle(m_latestParameters.hoodAngleDegs());
-		// }
-		// }))
-		// // Stop feeder when unable to fire
-		// .alongWith(Commands.run(() -> { if (!canFire.getAsBoolean()) m_feeder.stop();
-		// }))
-		// .onlyWhile(() -> m_isObjectiveOriented)
-		// .finallyDo(this::stopShooter);
-
 		return Commands.run(() -> {
 			// Continuously update shooter setpoints
 			updateShooterSetpointState(target.get());
 			if (m_latestParameters != null && m_latestParameters.isValid()) {
-				m_rollers.setRollerVelocity(m_latestParameters.rollerSpeedsRPM());
-				// m_turret.setTurretAngle(m_latestParameters.turretAngleRobot().getDegrees());
-				m_hood.setHoodAngle(kExitAngleOffset - m_latestParameters.hoodAngleDegs());
+				if (!overrideRollerSetpointChooser.get())
+					m_rollers.setRollerVelocity(m_latestParameters.rollerSpeedsRPM());
+				if (!overrideHoodSetpointChooser.get())
+					m_hood.setHoodAngle(kExitAngleOffset - m_latestParameters.hoodAngleDegs());
 			}
 
 			// Update commanded shot angular velocity
@@ -726,7 +684,6 @@ public class Superstructure extends SubsystemBase {
 				// Stop feeder when unable to fire
 				.alongWith(Commands.run(() -> { if (!canFire.getAsBoolean()) stopFeeding(); }))
 				.alongWith(Commands.run(() -> {
-					// TODO Needs testing
 					// Oscillate intake
 					if (m_primaryState != PrimaryState.kIntaking && m_primaryState != PrimaryState.kOuttaking
 							&& canFire.getAsBoolean()) {

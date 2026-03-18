@@ -11,8 +11,8 @@
       "style": "0",
       "userScale": "2",
       "width": "978",
-      "xpos": "1103",
-      "ypos": "818"
+      "xpos": "674",
+      "ypos": "726"
     }
   },
   "Window": {
@@ -37,23 +37,28 @@
       "Size": "300,560"
     },
     "###NetworkTables": {
-      "Collapsed": "0",
-      "Pos": "270,251",
+      "Collapsed": "1",
+      "Pos": "959,203",
       "Size": "750,347"
     },
     "###NetworkTables Info": {
       "Collapsed": "0",
-      "Pos": "767,89",
+      "Pos": "959,251",
       "Size": "750,199"
     },
     "###Other Devices": {
-      "Collapsed": "0",
-      "Pos": "767,48",
+      "Collapsed": "1",
+      "Pos": "936,54",
       "Size": "250,669"
+    },
+    "###RoboRIO": {
+      "Collapsed": "0",
+      "Pos": "5,125",
+      "Size": "119,146"
     },
     "###System Joysticks": {
       "Collapsed": "0",
-      "Pos": "407,80",
+      "Pos": "903,60",
       "Size": "192,218"
     },
     "###Timing": {
