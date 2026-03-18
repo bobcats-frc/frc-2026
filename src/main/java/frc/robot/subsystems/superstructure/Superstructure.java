@@ -40,6 +40,21 @@ import static frc.robot.subsystems.superstructure.SuperstructureConstants.kShoot
 import static frc.robot.subsystems.superstructure.SuperstructureConstants.kShootingFlightTimeFudgeFactors;
 import static frc.robot.subsystems.superstructure.SuperstructureConstants.kSwerveIdleVelocityThreshold;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
+
+import org.dyn4j.geometry.Rectangle;
+import org.dyn4j.geometry.Vector2;
+import org.ironmaple.simulation.IntakeSimulation;
+import org.ironmaple.simulation.IntakeSimulation.IntakeSide;
+import org.json.simple.parser.ParseException;
+import org.littletonrobotics.junction.Logger;
+import org.littletonrobotics.junction.networktables.LoggedDashboardChooser;
+
 import com.bobcats.lib.auto.LineTrajectoryUtils;
 import com.bobcats.lib.auto.LineTrajectoryUtils.Line;
 import com.bobcats.lib.auto.LineTrajectoryUtils.OptimizedLine;
@@ -48,23 +63,26 @@ import com.bobcats.lib.control.shooter.ShooterCalculator;
 import com.bobcats.lib.control.shooter.ShooterCalculator.ShooterParameters;
 import com.bobcats.lib.control.shooter.data.ShooterProjectile;
 import com.bobcats.lib.utils.AllianceUtil;
+import com.bobcats.lib.utils.LoggedFlashingDashboardColor;
+import com.bobcats.lib.utils.LoggedFlashingDashboardColor.FlashColor;
 import com.bobcats.lib.utils.Tracer;
 import com.pathplanner.lib.auto.AutoBuilder;
 import com.pathplanner.lib.path.PathPlannerPath;
 import com.pathplanner.lib.util.FileVersionException;
+
 import edu.wpi.first.math.filter.Debouncer;
 import edu.wpi.first.math.filter.Debouncer.DebounceType;
 import edu.wpi.first.math.geometry.Pose3d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Rotation3d;
 import edu.wpi.first.math.geometry.Transform2d;
+import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.geometry.Translation3d;
 import edu.wpi.first.wpilibj.Alert;
 import edu.wpi.first.wpilibj.Alert.AlertType;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.Notifier;
 import edu.wpi.first.wpilibj.Timer;
-import edu.wpi.first.wpilibj.util.Color;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.DeferredCommand;
@@ -73,7 +91,6 @@ import edu.wpi.first.wpilibj2.command.button.RobotModeTriggers;
 import frc.robot.Robot;
 import frc.robot.RobotContainer;
 import frc.robot.commands.drive.DriveCommands;
-import frc.robot.constants.Constants;
 import frc.robot.constants.Constants.PhysicalParameters;
 import frc.robot.constants.Constants.RobotMode;
 import frc.robot.constants.FieldConstants;
@@ -85,20 +102,7 @@ import frc.robot.subsystems.swerve.SwerveConstants.AutoConstants;
 import frc.robot.subsystems.swerve.SwerveConstants.DriveConstants;
 import frc.robot.subsystems.swerve.SwerveSubsystem;
 import frc.robot.util.SeasonUtils;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-import java.util.function.BooleanSupplier;
-import java.util.function.Supplier;
 import lombok.AllArgsConstructor;
-import org.dyn4j.geometry.Rectangle;
-import org.dyn4j.geometry.Vector2;
-import org.ironmaple.simulation.IntakeSimulation;
-import org.ironmaple.simulation.IntakeSimulation.IntakeSide;
-import org.json.simple.parser.ParseException;
-import org.littletonrobotics.junction.Logger;
-import org.littletonrobotics.junction.networktables.LoggedDashboardChooser;
 
 // State Notes:
 // Robot is assumed to have 3 state categories:
@@ -109,7 +113,8 @@ import org.littletonrobotics.junction.networktables.LoggedDashboardChooser;
 // -> Objective Oriented: Whether the robot is actively trying to either shoot or pass fuel
 
 /**
- * The finite-state-machine superstructure subsystem that manages the overall state of the
+ * The finite-state-machine superstructure subsystem that manages the overall
+ * state of the
  * robot.
  */
 public class Superstructure extends SubsystemBase {
@@ -163,6 +168,8 @@ public class Superstructure extends SubsystemBase {
 	private ShooterParameters m_latestParameters = new ShooterParameters(false,
 			Rotation2d.fromDegrees(kHoodCalibrationAngle), Rotation2d.kZero, 0, kHoodCalibrationAngle, 0,
 			Translation3d.kZero, Vector3.kZero, 0);
+	private OptimizedLine m_latestPassLineOpt = new OptimizedLine(new Line(Translation2d.kZero, Translation2d.kZero),
+			false);
 	private List<ShooterProjectile> m_projectiles = new ArrayList<>();
 	private double m_lastFuelShotSim = 0;
 	private double m_lastShooterUpdate;
@@ -171,19 +178,10 @@ public class Superstructure extends SubsystemBase {
 
 	private IntakeSimulation m_intakeSim;
 
-	private boolean m_isDashboardShotStateFlashOn = false;
-	private int m_shotFlashCycle;
-
-	private boolean m_isPrefireStateFlashOn = false;
-	private int m_prefireFlashCycle;
-
-	private boolean m_isDashboardIntakeStateFlashOn = false;
-	private int m_intakeFlashCycle;
+	private LoggedFlashingDashboardColor m_shooterReadyWarning, m_prefireWarning, m_intakeWarning;
 
 	private Timer m_intakeOscillationTimer = new Timer();
 	private static final double kMaxOscillationTime = 3.0;
-
-	private OptimizedLine m_latestPassLineOpt;
 
 	// Subsystems
 	private final Feeder m_feeder;
@@ -260,6 +258,36 @@ public class Superstructure extends SubsystemBase {
 			trajectoryThread.startPeriodic(1.0 / 1000.0);
 		}
 
+		m_shooterReadyWarning = new LoggedFlashingDashboardColor(
+				"Superstructure/ShooterReadyColor", kFlashPeriod, List
+						.of(new FlashColor(() -> !m_isObjectiveOriented, kShooterReadyFlashColor),
+								new FlashColor(() -> m_rollers.isNearSetpoint() && m_hood.isNearSetpoint()
+										&& m_swerve.ArbitraryPIDAngular.atSetpoint(), kShooterReadyFlashColor),
+								new FlashColor(
+										() -> !(m_rollers.isNearSetpoint() && m_hood.isNearSetpoint()
+												&& m_swerve.ArbitraryPIDAngular.atSetpoint()),
+										kShooterNotReadyFlashColor)),
+				List.of(new FlashColor(() -> !m_isObjectiveOriented, kShooterReadyFlashColor),
+						new FlashColor(() -> true, kShooterFlashOffColor)),
+				false);
+
+		// Whether we should start shooting early in order to optimize shot time
+		BooleanSupplier canPrefire = () -> SeasonUtils.getTimeUntilHubShift() <= m_latestParameters.timeOfFlight()
+				+ kShootingFlightTimeFudgeFactors.get(getAllianceHubLocation()
+						.getDistance(new Translation3d(m_swerve.getFilteredPose().getTranslation())))
+				+ kPrefireFlashTimeBuffer && isLatestShooterParamsRecent() && !SeasonUtils.isAllianceHubActive();
+
+		m_prefireWarning = new LoggedFlashingDashboardColor("Superstructure/PrefireColor", kFlashPeriod,
+				List.of(new FlashColor(canPrefire, kPrefireFlashColor)),
+				List.of(new FlashColor(canPrefire, kPrefireFlashColorSecondary),
+						new FlashColor(() -> true, kPrefireFlashOffColor)),
+				true);
+
+		m_intakeWarning = new LoggedFlashingDashboardColor("Superstructure/IntakerollerStatus", kFlashPeriod,
+				List.of(new FlashColor(() -> Math.abs(m_intake.getRollerVelocity()) >= kIntakeRollerVelocityThreshold,
+						kIntakeFlashRollingColor)),
+				kIntakeFlashOffColor, false);
+
 		setName("Superstructure");
 	}
 
@@ -270,60 +298,27 @@ public class Superstructure extends SubsystemBase {
 		if (m_chassisStateDebouncer.calculate(Math.hypot(m_swerve.getChassisSpeedsFieldRelative().vxMetersPerSecond,
 				m_swerve.getChassisSpeedsFieldRelative().vyMetersPerSecond) >= kSwerveIdleVelocityThreshold))
 			m_chassisState = ChassisState.kChassisDrive;
-		else m_chassisState = ChassisState.kChassisIdle;
+		else
+			m_chassisState = ChassisState.kChassisIdle;
 
 		if (Robot.isSimulation()) {
-			if (m_primaryState == PrimaryState.kIntaking) m_intakeSim.startIntake();
-			else m_intakeSim.stopIntake();
+			if (m_primaryState == PrimaryState.kIntaking)
+				m_intakeSim.startIntake();
+			else
+				m_intakeSim.stopIntake();
 
 			Logger.recordOutput("Superstructure/SimHopperFuelCount", m_intakeSim.getGamePiecesAmount());
 		}
 
 		// Flash dashboard for certain states
-		Color shooterFlashColor = kShooterFlashOffColor;
-		if (m_isDashboardShotStateFlashOn && m_rollers.isNearSetpoint() && m_hood.isNearSetpoint()
-				&& m_swerve.ArbitraryPIDAngular.atSetpoint())
-			shooterFlashColor = kShooterReadyFlashColor;
-		else if (m_isDashboardShotStateFlashOn && !(m_rollers.isNearSetpoint() && m_hood.isNearSetpoint()
-				&& m_swerve.ArbitraryPIDAngular.atSetpoint()))
-			shooterFlashColor = kShooterNotReadyFlashColor;
-		m_shotFlashCycle++;
-		if (m_shotFlashCycle >= (int) (kFlashPeriod / Constants.kLoopPeriodSeconds)) {
-			m_isDashboardShotStateFlashOn = !m_isDashboardShotStateFlashOn;
-			m_shotFlashCycle = 0;
-		}
+		m_shooterReadyWarning.update();
 
 		// Update shooter state even if we haven't enabled objective mode
-		if (!m_isObjectiveOriented) updateShooterSetpointState(getAllianceHubLocation());
-		// Whether we should start shooting early in order to optimize shot time
-		boolean canPrefire = SeasonUtils.getTimeUntilHubShift() <= m_latestParameters.timeOfFlight()
-				+ kShootingFlightTimeFudgeFactors.get(getAllianceHubLocation()
-						.getDistance(new Translation3d(m_swerve.getFilteredPose().getTranslation())))
-				+ kPrefireFlashTimeBuffer && isLatestShooterParamsRecent() && !SeasonUtils.isAllianceHubActive();
-		// Flash dashboard if shooter is ready
-		Color prefireFlashColor = kPrefireFlashOffColor;
-		if (m_isPrefireStateFlashOn && canPrefire) prefireFlashColor = kPrefireFlashColor;
-		else if (!m_isPrefireStateFlashOn && canPrefire) prefireFlashColor = kPrefireFlashColorSecondary;
-		m_prefireFlashCycle++;
-		if (m_prefireFlashCycle >= (int) (kFlashPeriod / Constants.kLoopPeriodSeconds)) {
-			m_isPrefireStateFlashOn = !m_isPrefireStateFlashOn;
-			m_prefireFlashCycle = 0;
-		}
+		if (!m_isObjectiveOriented || m_actionState == ActionState.kActionIdle)
+			updateShooterSetpointState(getAllianceHubLocation());
 
-		Color intakeFlashColor = kShooterFlashOffColor;
-		if (m_isDashboardIntakeStateFlashOn && Math.abs(m_intake.getRollerVelocity()) >= kIntakeRollerVelocityThreshold)
-			intakeFlashColor = kIntakeFlashRollingColor;
-		m_intakeFlashCycle++;
-		if (m_intakeFlashCycle >= (int) (kFlashPeriod / Constants.kLoopPeriodSeconds)) {
-			m_isDashboardIntakeStateFlashOn = !m_isDashboardIntakeStateFlashOn;
-			m_intakeFlashCycle = 0;
-		}
-
-		if (DriverStation.isDisabled()) {
-			shooterFlashColor = kShooterReadyFlashColor;
-			intakeFlashColor = kIntakeFlashOffColor;
-			prefireFlashColor = kPrefireFlashOffColor;
-		} else if (!m_isObjectiveOriented) { shooterFlashColor = kShooterReadyFlashColor; }
+		m_prefireWarning.update();
+		m_intakeWarning.update();
 
 		// Logging data
 		Logger.recordOutput("Superstructure/RobotState",
@@ -331,11 +326,7 @@ public class Superstructure extends SubsystemBase {
 		Logger.recordOutput("Superstructure/IsObjectiveOriented", m_isObjectiveOriented);
 		Logger.recordOutput("Superstructure/LatestShooterState", m_latestParameters.toString());
 		Logger.recordOutput("Superstructure/LastShooterStateUpdate", m_lastShooterUpdate);
-		;
 		Logger.recordOutput("Superstructure/IsFeeding", m_isFeeding);
-		Logger.recordOutput("Superstructure/ShooterReadyColor", shooterFlashColor);
-		Logger.recordOutput("Superstructure/IntakeRollerStatus", intakeFlashColor);
-		Logger.recordOutput("Superstructure/PrefireColor", prefireFlashColor);
 		Logger.recordOutput("CShooterControl/LatestShootingAngVel", DriveCommands.LatestShootingAngularVelocity);
 		Logger.recordOutput("CShooterControl/NearSetpoint", m_swerve.ArbitraryPIDAngular.atSetpoint());
 		Logger.recordOutput("CShooterControl/Setpoint", m_swerve.ArbitraryPIDAngular.getSetpoint());
@@ -385,8 +376,6 @@ public class Superstructure extends SubsystemBase {
 	 */
 	public Command startIntaking() {
 		return Commands.runOnce(() -> m_primaryState = PrimaryState.kIntaking)
-				// .andThen(Commands.runOnce(m_backpack::openBackpack))
-				// .andThen(Commands.waitUntil(m_backpack::isNearSetpoint))
 				.andThen(Commands.parallel(Commands.runOnce(m_intake::openIntake),
 						Commands.runOnce(m_intake::runIntakeRollers)))
 				.onlyIf(() -> m_primaryState == PrimaryState.kPrimaryIdle || m_primaryState == PrimaryState.kIntaking)
@@ -400,8 +389,6 @@ public class Superstructure extends SubsystemBase {
 	 */
 	public Command startOuttaking() {
 		return Commands.runOnce(() -> m_primaryState = PrimaryState.kOuttaking)
-				// .andThen(Commands.runOnce(m_backpack::openBackpack))
-				// .andThen(Commands.waitUntil(m_backpack::isNearSetpoint))
 				.andThen(Commands.parallel(Commands.runOnce(m_intake::openIntake),
 						Commands.runOnce(m_intake::runOuttakeRollers)))
 				.onlyIf(() -> m_primaryState == PrimaryState.kPrimaryIdle || m_primaryState == PrimaryState.kOuttaking)
@@ -414,10 +401,9 @@ public class Superstructure extends SubsystemBase {
 	 * @return The command to stop intaking/outtaking.
 	 */
 	public Command stopIntake() {
-		return Commands.parallel(Commands.runOnce(m_intake::stopRollers).onlyIf(() -> !m_isFeeding))
-				// ,Commands.runOnce(m_intake::closeIntake).onlyIf(() -> closeArm)
+		return Commands.runOnce(m_intake::stopRollers)
+				.onlyIf(() -> !m_isFeeding)
 				.andThen(Commands.waitUntil(m_intake::isArmNearSetpoint))
-				// .andThen(m_backpack::closeBackpack)
 				.andThen(Commands.runOnce(() -> m_primaryState = PrimaryState.kPrimaryIdle))
 				.onlyIf(() -> m_primaryState == PrimaryState.kIntaking || m_primaryState == PrimaryState.kOuttaking)
 				.withName("Intake.Stop");
@@ -426,13 +412,15 @@ public class Superstructure extends SubsystemBase {
 	// Action State Commands //
 
 	/**
-	 * Sets whether or not the robot should focus on a game objective such as scoring or passing.
+	 * Sets whether or not the robot should focus on a game objective such as
+	 * scoring or passing.
 	 *
 	 * @param isObjective Whether the robot should focus on an objective.
 	 */
 	public void setObjectiveOriented(boolean isObjective) {
 		m_isObjectiveOriented = isObjective;
-		if (!isObjective) m_actionState = ActionState.kActionIdle;
+		if (!isObjective)
+			m_actionState = ActionState.kActionIdle;
 	}
 
 	/**
@@ -440,19 +428,24 @@ public class Superstructure extends SubsystemBase {
 	 *
 	 * @return Whether the robot is objective oriented.
 	 */
-	public boolean isObjectiveOriented() { return m_isObjectiveOriented; }
+	public boolean isObjectiveOriented() {
+		return m_isObjectiveOriented;
+	}
 
 	/**
 	 * Returns whether the robot is using fallback scoring presets.
 	 *
 	 * @return Whether the robot is using fallback scoring presets.
 	 */
-	public boolean isFallbackScoring() { return m_isFallbackScoring.get(); }
+	public boolean isFallbackScoring() {
+		return m_isFallbackScoring.get();
+	}
 
 	/**
 	 * Returns an objective command that scores into the hub as long as it's ran.
 	 *
-	 * @param isFallback Whether the fallback shooting parameters should be used in case something
+	 * @param isFallback Whether the fallback shooting parameters should be used in
+	 *                   case something
 	 *                   goes wrong.
 	 * @return The objective scoring command.
 	 */
@@ -472,7 +465,8 @@ public class Superstructure extends SubsystemBase {
 	}
 
 	/**
-	 * Returns an objective command that passes fuel to the alliance zone as long as it's ran.
+	 * Returns an objective command that passes fuel to the alliance zone as long as
+	 * it's ran.
 	 *
 	 * @return The objective scoring command.
 	 */
@@ -518,7 +512,8 @@ public class Superstructure extends SubsystemBase {
 				.alongWith(Commands.run(() -> setObjectiveOriented(false)))
 				.onlyIf(() -> m_primaryState == PrimaryState.kPrimaryIdle || m_primaryState == PrimaryState.kOuttaking)
 				.onlyWhile(
-						() -> m_primaryState == PrimaryState.kPrimaryIdle || m_primaryState == PrimaryState.kOuttaking);
+						() -> m_primaryState == PrimaryState.kPrimaryIdle || m_primaryState == PrimaryState.kOuttaking)
+				.withName("AlignCorral");
 	}
 
 	/**
@@ -548,7 +543,9 @@ public class Superstructure extends SubsystemBase {
 	 *
 	 * @return The latest shooter parameters.
 	 */
-	public ShooterParameters getLatestShooterParameters() { return m_latestParameters; }
+	public ShooterParameters getLatestShooterParameters() {
+		return m_latestParameters;
+	}
 
 	/**
 	 * Returns whether the latest shot parameters are stale or not.
@@ -564,13 +561,16 @@ public class Superstructure extends SubsystemBase {
 	 *
 	 * @return The timestamp of the last update to the shooter parameters.
 	 */
-	public double getLastShooterParameterUpdate() { return m_lastShooterUpdate; }
+	public double getLastShooterParameterUpdate() {
+		return m_lastShooterUpdate;
+	}
 
 	// Private Utils //
 
 	/** Starts feeding the shooter. */
 	private void startFeeding() {
-		if (m_isFeeding) return;
+		if (m_isFeeding)
+			return;
 		m_feeder.feed();
 		m_intake.runIntakeRollers();
 		m_isFeeding = true;
@@ -578,9 +578,11 @@ public class Superstructure extends SubsystemBase {
 
 	/** Stops feeding the shooter. */
 	private void stopFeeding() {
-		if (!m_isFeeding) return;
+		if (!m_isFeeding)
+			return;
 		m_feeder.stop();
-		if (m_primaryState != PrimaryState.kIntaking) m_intake.stopRollers();
+		if (m_primaryState != PrimaryState.kIntaking)
+			m_intake.stopRollers();
 		m_isFeeding = false;
 	}
 
@@ -590,78 +592,85 @@ public class Superstructure extends SubsystemBase {
 				&& m_latestParameters.isValid() && m_hood.isNearSetpoint() && m_swerve.ArbitraryPIDAngular.atSetpoint()
 				&& m_rollers.isNearSetpoint() && firingCondition.getAsBoolean();
 
-		if (Robot.kRobotMode == RobotMode.kSim) return Commands.run(() -> {
-			// Continuously update shooter setpoints
-			updateShooterSetpointState(target.get());
-			if (m_latestParameters != null && m_latestParameters.isValid()) {
-				if (!overrideRollerSetpointChooser.get())
-					m_rollers.setRollerVelocity(m_latestParameters.rollerSpeedsRPM());
-				if (!overrideHoodSetpointChooser.get())
-					m_hood.setHoodAngle(kExitAngleOffset - m_latestParameters.hoodAngleDegs());
-			}
+		if (Robot.kRobotMode == RobotMode.kSim)
+			return Commands.run(() -> {
+				// Continuously update shooter setpoints
+				updateShooterSetpointState(target.get());
+				if (m_latestParameters != null && m_latestParameters.isValid()) {
+					if (!overrideRollerSetpointChooser.get())
+						m_rollers.setRollerVelocity(m_latestParameters.rollerSpeedsRPM());
+					if (!overrideHoodSetpointChooser.get())
+						m_hood.setHoodAngle(kExitAngleOffset - m_latestParameters.hoodAngleDegs());
+				}
 
-			// Update commanded shot angular velocity
-			DriveCommands.LatestShootingAngularVelocity = m_swerve.ArbitraryPIDAngular.calculate(
-					m_swerve.getRobotRotation().getRadians(),
-					getLatestShooterParameters().turretAngleField().getRadians() - Math.toRadians(kHoodCalibrationYaw));
+				// Update commanded shot angular velocity
+				DriveCommands.LatestShootingAngularVelocity = m_swerve.ArbitraryPIDAngular.calculate(
+						m_swerve.getRobotRotation().getRadians(),
+						getLatestShooterParameters().turretAngleField().getRadians()
+								- Math.toRadians(kHoodCalibrationYaw));
 
-			// Feed only if the shot is possible
-			if (canFire.getAsBoolean()) startFeeding();
+				// Feed only if the shot is possible
+				if (canFire.getAsBoolean())
+					startFeeding();
 
-			// Spawn projectile if there are game pieces in the hopper
-			if (canFire.getAsBoolean() && Timer.getFPGATimestamp() - m_lastFuelShotSim >= kAverageShotTime
-					&& m_intakeSim.getGamePiecesAmount() > 0) {
-				// startFeeding();
+				// Spawn projectile if there are game pieces in the hopper
+				if (canFire.getAsBoolean() && Timer.getFPGATimestamp() - m_lastFuelShotSim >= kAverageShotTime
+						&& m_intakeSim.getGamePiecesAmount() > 0) {
+					// startFeeding();
 
-				// Make sure to use current state values, and not the ideal values
-				var currState = m_shooterCalculator.computeCurrentExitParameters(m_latestParameters,
-						kExitAngleOffset - m_hood.getAngle(), kHoodCalibrationYaw, m_rollers.getVelocity(),
-						new Pose3d(RobotContainer.getInstance().swerveSim.getSimulatedDriveTrainPose()),
-						RobotContainer.getInstance().swerveSim.getDriveTrainSimulatedChassisSpeedsFieldRelative(),
-						kFuelProjectile);
-				m_lastFuelShotSim = Timer.getFPGATimestamp();
-				m_projectiles.add(new ShooterProjectile(kFuelProjectile, currState.exitVelocityVec3(),
-						new Pose3d(currState.exitPose(), Rotation3d.kZero)));
-				m_intakeSim.obtainGamePieceFromIntake();
-			}
-		})
-				// Stop feeder when unable to fire
-				.alongWith(Commands.run(() -> { if (!canFire.getAsBoolean()) stopFeeding(); }))
-				.alongWith(Commands.run(() -> {
-					// Oscillate intake
-					if (m_primaryState != PrimaryState.kIntaking && m_primaryState != PrimaryState.kOuttaking
-							&& canFire.getAsBoolean()) {
-						if (m_intake.getLatestArmSetpoint() == kArmPushFuelAngle && (m_intake.isArmNearSetpoint()
-								|| m_intakeOscillationTimer.hasElapsed(kMaxOscillationTime))) {
-							m_intake.openIntake();
-							m_intakeOscillationTimer.restart();
-						} else if (m_intake.getLatestArmSetpoint() == kArmOpenedAngle && (m_intake.isArmNearSetpoint()
-								|| m_intakeOscillationTimer.hasElapsed(kMaxOscillationTime))) {
-									m_intake.intakePushAngle();
-									m_intakeOscillationTimer.restart();
-								} else
-							if (m_intake.getLatestArmSetpoint() != kArmOpenedAngle
+					// Make sure to use current state values, and not the ideal values
+					var currState = m_shooterCalculator.computeCurrentExitParameters(m_latestParameters,
+							kExitAngleOffset - m_hood.getAngle(), kHoodCalibrationYaw, m_rollers.getVelocity(),
+							new Pose3d(RobotContainer.getInstance().swerveSim.getSimulatedDriveTrainPose()),
+							RobotContainer.getInstance().swerveSim.getDriveTrainSimulatedChassisSpeedsFieldRelative(),
+							kFuelProjectile);
+					m_lastFuelShotSim = Timer.getFPGATimestamp();
+					m_projectiles.add(new ShooterProjectile(kFuelProjectile, currState.exitVelocityVec3(),
+							new Pose3d(currState.exitPose(), Rotation3d.kZero)));
+					m_intakeSim.obtainGamePieceFromIntake();
+				}
+			})
+					// Stop feeder when unable to fire
+					.alongWith(Commands.run(() -> {
+						if (!canFire.getAsBoolean())
+							stopFeeding();
+					}))
+					.alongWith(Commands.run(() -> {
+						// Oscillate intake
+						if (m_primaryState != PrimaryState.kIntaking && m_primaryState != PrimaryState.kOuttaking
+								&& canFire.getAsBoolean()) {
+							if (m_intake.getLatestArmSetpoint() == kArmPushFuelAngle && (m_intake.isArmNearSetpoint()
+									|| m_intakeOscillationTimer.hasElapsed(kMaxOscillationTime))) {
+								m_intake.openIntake();
+								m_intakeOscillationTimer.restart();
+							} else if (m_intake.getLatestArmSetpoint() == kArmOpenedAngle
+									&& (m_intake.isArmNearSetpoint()
+											|| m_intakeOscillationTimer.hasElapsed(kMaxOscillationTime))) {
+								m_intake.intakePushAngle();
+								m_intakeOscillationTimer.restart();
+							} else if (m_intake.getLatestArmSetpoint() != kArmOpenedAngle
 									&& m_intake.getLatestArmSetpoint() != kArmPushFuelAngle) {
-										m_intake.openIntake();
-									} else
-								if (!m_intakeOscillationTimer.isRunning()) { m_intakeOscillationTimer.start(); }
-					} else if (m_primaryState != PrimaryState.kIntaking && m_primaryState != PrimaryState.kOuttaking
-							&& !canFire.getAsBoolean()) {
-								m_intake.stopIntakeArm();
-								m_intakeOscillationTimer.stop();
-								m_intakeOscillationTimer.reset();
+								m_intake.openIntake();
+							} else if (!m_intakeOscillationTimer.isRunning()) {
+								m_intakeOscillationTimer.start();
 							}
-				}))
-				.onlyWhile(() -> m_isObjectiveOriented)
-				.finallyDo(() -> {
-					DriveCommands.LatestShootingAngularVelocity = 0;
-					m_rollers.stop();
-					m_hood.stop();
-					stopFeeding();
-					m_actionState = ActionState.kActionIdle;
-					m_intakeOscillationTimer.stop();
-					m_intakeOscillationTimer.reset();
-				});
+						} else if (m_primaryState != PrimaryState.kIntaking && m_primaryState != PrimaryState.kOuttaking
+								&& !canFire.getAsBoolean()) {
+							m_intake.stopIntakeArm();
+							m_intakeOscillationTimer.stop();
+							m_intakeOscillationTimer.reset();
+						}
+					}))
+					.onlyWhile(() -> m_isObjectiveOriented)
+					.finallyDo(() -> {
+						DriveCommands.LatestShootingAngularVelocity = 0;
+						m_rollers.stop();
+						m_hood.stop();
+						stopFeeding();
+						m_actionState = ActionState.kActionIdle;
+						m_intakeOscillationTimer.stop();
+						m_intakeOscillationTimer.reset();
+					});
 
 		return Commands.run(() -> {
 			// Continuously update shooter setpoints
@@ -679,10 +688,14 @@ public class Superstructure extends SubsystemBase {
 					getLatestShooterParameters().turretAngleField().getRadians() - Math.toRadians(kHoodCalibrationYaw));
 
 			// Shoot if possible by enabling the feeder
-			if (canFire.getAsBoolean()) startFeeding();
+			if (canFire.getAsBoolean())
+				startFeeding();
 		})
 				// Stop feeder when unable to fire
-				.alongWith(Commands.run(() -> { if (!canFire.getAsBoolean()) stopFeeding(); }))
+				.alongWith(Commands.run(() -> {
+					if (!canFire.getAsBoolean())
+						stopFeeding();
+				}))
 				.alongWith(Commands.run(() -> {
 					// Oscillate intake
 					if (m_primaryState != PrimaryState.kIntaking && m_primaryState != PrimaryState.kOuttaking
@@ -693,20 +706,20 @@ public class Superstructure extends SubsystemBase {
 							m_intakeOscillationTimer.restart();
 						} else if (m_intake.getLatestArmSetpoint() == kArmOpenedAngle && (m_intake.isArmNearSetpoint()
 								|| m_intakeOscillationTimer.hasElapsed(kMaxOscillationTime))) {
-									m_intake.intakePushAngle();
-									m_intakeOscillationTimer.restart();
-								} else
-							if (m_intake.getLatestArmSetpoint() != kArmOpenedAngle
-									&& m_intake.getLatestArmSetpoint() != kArmPushFuelAngle) {
-										m_intake.openIntake();
-									} else
-								if (!m_intakeOscillationTimer.isRunning()) { m_intakeOscillationTimer.start(); }
+							m_intake.intakePushAngle();
+							m_intakeOscillationTimer.restart();
+						} else if (m_intake.getLatestArmSetpoint() != kArmOpenedAngle
+								&& m_intake.getLatestArmSetpoint() != kArmPushFuelAngle) {
+							m_intake.openIntake();
+						} else if (!m_intakeOscillationTimer.isRunning()) {
+							m_intakeOscillationTimer.start();
+						}
 					} else if (m_primaryState != PrimaryState.kIntaking && m_primaryState != PrimaryState.kOuttaking
 							&& !canFire.getAsBoolean()) {
-								m_intake.stopIntakeArm();
-								m_intakeOscillationTimer.stop();
-								m_intakeOscillationTimer.reset();
-							}
+						m_intake.stopIntakeArm();
+						m_intakeOscillationTimer.stop();
+						m_intakeOscillationTimer.reset();
+					}
 				}))
 				.onlyWhile(() -> m_isObjectiveOriented)
 				.finallyDo(() -> {
@@ -767,7 +780,8 @@ public class Superstructure extends SubsystemBase {
 
 	/** Flips the shooter parameters based on alliance. */
 	private ShooterParameters flipParametersAlliance(ShooterParameters blueRelativeParams) {
-		if (!AllianceUtil.isRedAlliance()) return blueRelativeParams;
+		if (!AllianceUtil.isRedAlliance())
+			return blueRelativeParams;
 
 		return new ShooterParameters(blueRelativeParams.isValid(),
 				blueRelativeParams.turretAngleField().plus(Rotation2d.kPi), blueRelativeParams.turretAngleRobot(),
